@@ -1,517 +1,206 @@
 import { useEffect, useMemo, useRef } from 'react'
-import { useFrame } from '@react-three/fiber'
-import type { ThreeEvent } from '@react-three/fiber'
+import { useFrame, type ThreeEvent } from '@react-three/fiber'
 import * as T from 'three'
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
-import type { PoseId } from './data'
+import { DecalGeometry } from 'three/addons/geometries/DecalGeometry.js'
+import { features, type PoseId } from './data'
+import { createBody, createFace, createForelock, createMane, createMitten, createMouth, createPaw, createTailTip, faceDepth } from './lionGeometry'
 import markUrl from './zhixin-mark.jpg'
 
-type Euler3 = readonly [number, number, number]
-type PoseSpec = {
-  yaw: number; head: Euler3; hop: number; tail: Euler3
-  armL: Euler3; armR: Euler3; gloveL: Euler3; gloveR: Euler3
-  legL: Euler3; legR: Euler3; kneeL: Euler3; kneeR: Euler3
-  look: Euler3; brow: number; browTilt: number; mouth: number
+type Euler3 = [number, number, number]
+type PoseSpec = { yaw: number; head: Euler3; armL: Euler3; armR: Euler3; wristL: Euler3; wristR: Euler3; legL: Euler3; legR: Euler3; ankleL: Euler3; ankleR: Euler3; tail: Euler3; lift: number }
+const POSES: Record<PoseId, PoseSpec> = {
+  stand: { yaw: 0, head: [0, 0, 0], armL: [-0.1, 0, -0.34], armR: [-0.1, 0, 0.34], wristL: [0, 0, 0.12], wristR: [0, 0, -0.12], legL: [0, 0, -0.06], legR: [0, 0, 0.06], ankleL: [0, 0, 0], ankleR: [0, 0, 0], tail: [0, 0, 0], lift: 0 },
+  cheer: { yaw: -0.06, head: [-0.045, 0.04, -0.035], armL: [0.05, -0.12, -2.3], armR: [0.05, 0.12, 2.3], wristL: [0, Math.PI, 0.16], wristR: [0, -Math.PI, -0.16], legL: [-1.25, -0.08, -0.2], legR: [0.32, 0, 0.15], ankleL: [0.12, 0, 0], ankleR: [0.55, 0, 0], tail: [0.12, -0.18, 0.12], lift: 0.22 },
+  glance: { yaw: -0.64, head: [0.015, 0.72, 0.075], armL: [-0.12, 0, -0.25], armR: [-0.25, 0.1, 2.03], wristL: [0, 0, 0.1], wristR: [0, -Math.PI, -0.12], legL: [0, 0, -0.07], legR: [0.08, 0, 0.07], ankleL: [0, 0, 0], ankleR: [0.12, 0, 0], tail: [0.1, 0.55, 0.25], lift: 0 },
 }
+const GOLD = '#f6a610', CREAM = '#fff3df'
 
-const POSE: Record<PoseId, PoseSpec> = {
-  stand: {
-    yaw: 0, head: [0, 0, 0], hop: 0, look: [0, 0, 0], brow: 0.08, browTilt: 0, mouth: 1, tail: [0, 0, 0],
-    armL: [-0.18, 0.04, -0.36], armR: [-0.18, -0.04, 0.36], gloveL: [0.4, 0.25, 0.12], gloveR: [0.4, -0.25, -0.12],
-    legL: [0.05, 0, -0.05], legR: [0.05, 0, 0.05], kneeL: [0.16, 0, 0], kneeR: [0.16, 0, 0],
-  },
-  cheer: {
-    yaw: 0, head: [-0.08, 0, 0], hop: 1, look: [-0.1, 0, 0], brow: -0.32, browTilt: 0, mouth: 1.24, tail: [-0.25, 0.25, 0.2],
-    armL: [-0.22, 0.12, -2.42], armR: [-0.22, -0.12, 2.42], gloveL: [-0.25, 0.85, 0.4], gloveR: [-0.25, -0.85, -0.4],
-    legL: [-1.2, 0.06, -0.16], legR: [0.1, 0, 0.05], kneeL: [1.45, 0, 0.08], kneeR: [0.32, 0, 0],
-  },
-  glance: {
-    yaw: -0.8, head: [0.05, 0.95, 0.05], hop: 0, look: [0.04, 0.32, 0], brow: 0.02, browTilt: 0.38, mouth: 0.94, tail: [0.1, 0.85, 0.35],
-    armL: [-0.16, 0, -0.26], armR: [-0.28, -0.08, 2.12], gloveL: [0.32, 0.2, 0.08], gloveR: [-0.2, -0.55, -0.18],
-    legL: [0.04, 0, -0.04], legR: [0.16, 0, 0.07], kneeL: [0.18, 0, 0], kneeR: [0.38, 0, 0],
-  },
-}
-
-const ORANGE = '#f6a01a'
-const ORANGE_DEEP = '#ee8a16'
-const CREAM = '#fff6ea'
-
-function Glossy({ color, roughness = 0.36, vertexColors = false, emissive, emissiveIntensity = 0 }: { color: string; roughness?: number; vertexColors?: boolean; emissive?: string; emissiveIntensity?: number }) {
-  return <meshPhysicalMaterial color={color} vertexColors={vertexColors} roughness={roughness} metalness={0} clearcoat={0.45} clearcoatRoughness={0.32} emissive={emissive ?? '#000000'} emissiveIntensity={emissiveIntensity} />
-}
-
-function paintGradient(geometry: T.BufferGeometry, bottom: string, top: string, yMin: number, yMax: number) {
-  const position = geometry.attributes.position
-  const colors = new Float32Array(position.count * 3)
-  const a = new T.Color(bottom), b = new T.Color(top), c = new T.Color()
-  for (let i = 0; i < position.count; i++) {
-    const t = T.MathUtils.smoothstep(position.getY(i), yMin, yMax)
-    c.copy(a).lerp(b, t)
-    colors[i * 3] = c.r; colors[i * 3 + 1] = c.g; colors[i * 3 + 2] = c.b
+export function getFeatureFraming(pose: PoseId, id: number) {
+  const spec = POSES[pose], feature = features[id]
+  const point = new T.Vector3(...feature.point).sub(new T.Vector3(0, 0.135, 0))
+  const rotation = new T.Quaternion().setFromEuler(new T.Euler(0, spec.yaw, 0))
+  if (id <= 2) {
+    const pivot = new T.Vector3(0, 1.85, 0.02)
+    const headRotation = new T.Quaternion().setFromEuler(new T.Euler(...spec.head))
+    point.sub(pivot).applyQuaternion(headRotation).add(pivot)
+    rotation.multiply(headRotation)
+  } else if (id === 4) {
+    point.set(0, -0.48 * (pose === 'cheer' ? 1.3 : 1), 0.018)
+      .applyEuler(new T.Euler(...spec.armL)).add(new T.Vector3(-0.38, 1.13, 0.015))
+  } else if (id === 5) {
+    const pivot = new T.Vector3(0.29, 0.66, -0.28)
+    point.sub(pivot).applyEuler(new T.Euler(...spec.tail)).add(pivot)
   }
-  geometry.setAttribute('color', new T.BufferAttribute(colors, 3))
-  return geometry
+  point.applyAxisAngle(new T.Vector3(0, 1, 0), spec.yaw).y += 0.135 + spec.lift
+  const offset = new T.Vector3(...feature.camera).sub(new T.Vector3(...feature.point)).applyQuaternion(rotation)
+  return { pos: point.clone().add(offset).toArray(), at: point.toArray() }
 }
 
-function dampEuler(group: T.Object3D | null, target: Euler3, speed: number, dt: number) {
-  if (!group) return
-  group.rotation.x = T.MathUtils.damp(group.rotation.x, target[0], speed, dt)
-  group.rotation.y = T.MathUtils.damp(group.rotation.y, target[1], speed, dt)
-  group.rotation.z = T.MathUtils.damp(group.rotation.z, target[2], speed, dt)
+function Satin({ color = '#ffffff', vertexColors = false, roughness = 0.38, selected = false }: { color?: string; vertexColors?: boolean; roughness?: number; selected?: boolean }) {
+  return <meshPhysicalMaterial color={color} vertexColors={vertexColors} roughness={roughness} metalness={0} clearcoat={0.23} clearcoatRoughness={0.3} envMapIntensity={0.75} emissive="#efb65e" emissiveIntensity={selected ? 0.055 : 0} />
 }
-
-function useDisposable<G extends T.BufferGeometry>(factory: () => G, rev = 0) {
-  const geometry = useMemo(factory, [rev])
-  useEffect(() => () => geometry.dispose(), [geometry])
-  return geometry
+function dampRotation(object: T.Object3D | null, target: Euler3, dt: number, reduced: boolean) {
+  if (!object) return
+  if (reduced) { object.rotation.set(...target); return }
+  object.rotation.x = T.MathUtils.damp(object.rotation.x, target[0], 6, dt)
+  object.rotation.y = T.MathUtils.damp(object.rotation.y, target[1], 6, dt)
+  object.rotation.z = T.MathUtils.damp(object.rotation.z, target[2], 6, dt)
 }
-
-// One merged geometry: a ring of rounded lobes over a filler disc, tinted yellow at the crown and orange at the jaw.
-function useManeGeometry() {
-  return useDisposable(() => {
-    const parts: T.BufferGeometry[] = []
-    const lobes = 11
-    for (let i = 0; i < lobes; i++) {
-      const a = (i / lobes) * Math.PI * 2 + Math.PI / 2
-      const radius = 0.72 + (i % 2) * 0.03
-      const size = 0.36 + (i % 3) * 0.02
-      const lobe = new T.SphereGeometry(size, 30, 22)
-      lobe.scale(1, 1, 0.62)
-      lobe.translate(Math.cos(a) * radius, Math.sin(a) * radius * 0.94, -0.04)
-      parts.push(lobe)
-    }
-    for (let i = 0; i < 8; i++) {
-      const a = (i / 8) * Math.PI * 2 + Math.PI / 8
-      const lobe = new T.SphereGeometry(0.3, 26, 18)
-      lobe.scale(1, 1, 0.56)
-      lobe.translate(Math.cos(a) * 0.5, Math.sin(a) * 0.5 * 0.92 + 0.02, -0.12)
-      parts.push(lobe)
-    }
-    const filler = new T.SphereGeometry(0.82, 36, 24)
-    filler.scale(1, 0.92, 0.34)
-    filler.translate(0, 0, -0.1)
-    parts.push(filler)
-    const merged = mergeGeometries(parts, false)!
-    parts.forEach(p => p.dispose())
-    return paintGradient(merged, '#ee7f12', '#ffcc3a', -0.95, 0.75)
-  })
+function useSculptures() {
+  const geometries = useMemo(() => ({ mane: createMane(), face: createFace(), mouth: createMouth(), tuft: createForelock(), body: createBody(), paw: createPaw(), mitten: createMitten(), tailTip: createTailTip() }), [])
+  useEffect(() => () => Object.values(geometries).forEach(g => g.dispose()), [geometries])
+  return geometries
 }
-
-// Flame-shaped forelock: a lathe profile bent slightly backwards toward the tip.
-function useTuftGeometry() {
-  return useDisposable(() => {
-    const profile = [
-      new T.Vector2(0.001, 0), new T.Vector2(0.13, 0.015), new T.Vector2(0.19, 0.1), new T.Vector2(0.2, 0.22),
-      new T.Vector2(0.17, 0.36), new T.Vector2(0.11, 0.48), new T.Vector2(0.05, 0.57), new T.Vector2(0.001, 0.64),
-    ]
-    const geometry = new T.LatheGeometry(profile, 32)
-    const position = geometry.attributes.position
-    for (let i = 0; i < position.count; i++) {
-      const y = position.getY(i), k = (y / 0.64) ** 2
-      position.setX(i, position.getX(i) * (1 - k * 0.12) - k * 0.09)
-      position.setZ(i, position.getZ(i) * 0.86 - k * 0.12)
-    }
-    geometry.computeVertexNormals()
-    return paintGradient(geometry, '#f4a020', '#ffe34a', 0.02, 0.5)
-  })
-}
-
-// Torso with a warm gradient: deeper orange at the haunches, brighter at the shoulders.
-function useBodyGeometry() {
-  return useDisposable(() => paintGradient(new T.SphereGeometry(1, 48, 36), '#e8840f', '#ffb43c', -1, 1))
-}
-
-// Slender tail that sweeps outward and up, ending in a spade-shaped tuft.
-function useTailCurve() {
-  return useMemo(() => new T.CatmullRomCurve3([
-    new T.Vector3(0, 0, 0), new T.Vector3(0.18, -0.12, -0.16), new T.Vector3(0.42, -0.18, -0.2),
-    new T.Vector3(0.66, -0.06, -0.12), new T.Vector3(0.78, 0.2, -0.02),
-  ]), [])
-}
-
 function useEmblemTexture() {
   const texture = useMemo(() => {
     const canvas = document.createElement('canvas')
-    canvas.width = 1024
-    canvas.height = 512
+    canvas.width = 1024; canvas.height = 512
     const map = new T.CanvasTexture(canvas)
     map.colorSpace = T.SRGBColorSpace
     map.anisotropy = 8
-    const image = new Image()
-    image.onload = () => {
-      const src = document.createElement('canvas')
-      src.width = image.width
-      src.height = image.height
-      const source = src.getContext('2d')!
-      source.drawImage(image, 0, 0)
-      const data = source.getImageData(0, 0, src.width, src.height)
-      const px = data.data
-      let minX = src.width
-      let minY = src.height
-      let maxX = 0
-      let maxY = 0
-      for (let y = 0, i = 0; y < src.height; y++) {
-        for (let x = 0; x < src.width; x++, i += 4) {
-          const lum = Math.max(px[i], px[i + 1], px[i + 2])
-          const t = T.MathUtils.smoothstep(lum, 28, 72)
-          px[i] = px[i + 1] = px[i + 2] = 255
-          px[i + 3] = Math.round(t * 255)
-          if (t > 0.2) {
-            if (x < minX) minX = x
-            if (y < minY) minY = y
-            if (x > maxX) maxX = x
-            if (y > maxY) maxY = y
-          }
-        }
-      }
-      source.putImageData(data, 0, 0)
-      const ctx = canvas.getContext('2d')!
-      ctx.clearRect(0, 0, canvas.width, canvas.height)
-      const cropW = Math.max(1, maxX - minX)
-      const cropH = Math.max(1, maxY - minY)
-      const maxW = canvas.width * 0.96
-      const maxH = canvas.height * 0.92
-      const aspect = cropW / cropH
-      let w = maxW
-      let h = w / aspect
-      if (h > maxH) {
-        h = maxH
-        w = h * aspect
-      }
-      ctx.drawImage(src, minX, minY, cropW, cropH, (canvas.width - w) / 2, (canvas.height - h) / 2 + canvas.height * 0.02, w, h)
-      map.needsUpdate = true
-    }
-    image.src = markUrl
     return map
   }, [])
-  useEffect(() => () => texture.dispose(), [texture])
+  useEffect(() => {
+    let cancelled = false
+    const image = new Image()
+    image.onload = () => {
+      if (cancelled) return
+      const canvas = texture.image as HTMLCanvasElement, ctx = canvas.getContext('2d')!
+      ctx.drawImage(image, 0, 0, canvas.width, canvas.height)
+      const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height)
+      for (let i = 0; i < pixels.data.length; i += 4) {
+        const alpha = T.MathUtils.smoothstep(pixels.data[i], 24, 100)
+        pixels.data[i] = pixels.data[i + 1] = pixels.data[i + 2] = 255
+        pixels.data[i + 3] = Math.round(alpha * 255)
+      }
+      ctx.putImageData(pixels, 0, 0)
+      texture.needsUpdate = true
+    }
+    image.src = markUrl
+    return () => { cancelled = true; image.onload = null; texture.dispose() }
+  }, [texture])
   return texture
 }
-
-function Emblem() {
+function Emblem({ body }: { body: T.BufferGeometry }) {
   const texture = useEmblemTexture()
-  return (
-    <mesh position={[0, 0.9, 0.01]} scale={[0.53, 0.56, 0.47]}>
-      <sphereGeometry args={[1, 64, 24, Math.PI / 2 - 0.78, 1.56, Math.PI / 2 - 0.42, 0.7]} />
-      <meshStandardMaterial map={texture} transparent alphaTest={0.08} roughness={0.55} polygonOffset polygonOffsetFactor={-4} depthWrite={false} />
-    </mesh>
-  )
+  const geometry = useMemo(() => {
+    const mesh = new T.Mesh(body)
+    mesh.position.set(0, 0.86, 0)
+    mesh.updateMatrixWorld(true)
+    const decal = new DecalGeometry(mesh, new T.Vector3(0, 0.97, 0.37), new T.Euler(), new T.Vector3(0.59, 0.295, 0.22))
+    ;(mesh.material as T.Material).dispose()
+    return decal
+  }, [body])
+  useEffect(() => () => geometry.dispose(), [geometry])
+  return <mesh geometry={geometry} renderOrder={1}><meshStandardMaterial map={texture} transparent depthWrite={false} polygonOffset polygonOffsetFactor={-3} roughness={0.48} /></mesh>
 }
-
-function Hit({ part, position, scale, onSelect }: { part: number; position: [number, number, number]; scale: [number, number, number]; onSelect: (id: number) => void }) {
+function Eye({ side }: { side: number }) {
+  const x = side * 0.265, y = 0.19
   return (
-    <mesh
-      position={position}
-      scale={scale}
-      onClick={(event: ThreeEvent<MouseEvent>) => { event.stopPropagation(); if (event.delta < 6) onSelect(part) }}
-      onPointerOver={(event: ThreeEvent<PointerEvent>) => { event.stopPropagation(); document.body.style.cursor = 'pointer' }}
-      onPointerOut={() => { document.body.style.cursor = 'grab' }}
-    >
-      <sphereGeometry args={[1, 10, 8]} />
-      <meshBasicMaterial transparent opacity={0} depthWrite={false} />
-    </mesh>
-  )
-}
-
-function useFaceGeometry() {
-  return useDisposable(() => {
-    const geo = new T.SphereGeometry(1, 96, 72)
-    const pos = geo.attributes.position
-    const eyes = [new T.Vector3(-0.36, 0.22, 0.88), new T.Vector3(0.36, 0.22, 0.88)]
-    const mouth = new T.Vector3(0, -0.5, 0.74)
-    const nosePad = new T.Vector3(0, -0.14, 0.97)
-    const cheeks = [new T.Vector3(-0.5, -0.2, 0.8), new T.Vector3(0.5, -0.2, 0.8)]
-    const v = new T.Vector3()
-    const orig = new T.Vector3()
-    const cream = new T.Color('#fff6ea')
-    const blush = new T.Color('#ef8582')
-    const noseBrown = new T.Color('#7a3424')
-    const tint = new T.Color()
-    const colors = new Float32Array(pos.count * 3)
-    const falloff = (d: number, radius: number) => {
-      if (d >= radius) return 0
-      const t = 1 - d / radius
-      return t * t * (3 - 2 * t)
-    }
-    for (let i = 0; i < pos.count; i++) {
-      orig.fromBufferAttribute(pos, i)
-      v.copy(orig)
-      let sink = 0
-      for (const eye of eyes) sink += falloff(v.distanceTo(eye), 0.27) * 0.9
-      const smileY = (v.y - mouth.y - Math.abs(v.x) * 0.2) / 0.4
-      const smileX = v.x / 0.4
-      sink += falloff(Math.hypot(smileX, smileY, (v.z - mouth.z) * 1.4), 1)
-      const keep = Math.max(
-        falloff(orig.distanceTo(nosePad), 0.26),
-        falloff(orig.distanceTo(cheeks[0]), 0.24) * 0.7,
-        falloff(orig.distanceTo(cheeks[1]), 0.24) * 0.7,
-      )
-      sink *= 1 - keep
-      if (sink > 0) {
-        v.z -= sink * 0.46
-        v.multiplyScalar(Math.max(0.62, 1 - sink * 0.14))
-      }
-      const puff = Math.max(
-        falloff(orig.distanceTo(cheeks[0]), 0.3),
-        falloff(orig.distanceTo(cheeks[1]), 0.3),
-      )
-      if (puff > 0) v.addScaledVector(orig, puff * 0.06)
-      const bump = orig.z > 0.55
-        ? falloff(Math.hypot(orig.x / 0.14, (orig.y + 0.12) / 0.1), 1)
-        : 0
-      if (bump > 0) v.z += bump * 0.04
-      pos.setXYZ(i, v.x, v.y, v.z)
-      let blushAmt = 0
-      for (const cheek of cheeks) blushAmt += falloff(orig.distanceTo(cheek), 0.23)
-      tint.copy(cream).lerp(blush, Math.min(1, blushAmt * 1.2))
-      if (bump > 0) tint.lerp(noseBrown, Math.min(1, bump * 1.6))
-      colors[i * 3] = tint.r
-      colors[i * 3 + 1] = tint.g
-      colors[i * 3 + 2] = tint.b
-    }
-    geo.setAttribute('color', new T.BufferAttribute(colors, 3))
-    geo.computeVertexNormals()
-    return geo
-  }, 6)
-}
-
-function ToothBand() {
-  const curve = useMemo(() => new T.CatmullRomCurve3([
-    new T.Vector3(-0.16, 0.018, 0),
-    new T.Vector3(-0.08, 0.04, 0),
-    new T.Vector3(0, 0.05, 0),
-    new T.Vector3(0.08, 0.04, 0),
-    new T.Vector3(0.16, 0.018, 0),
-  ]), [])
-  return (
-    <mesh position={[0, 0.01, 0.055]} scale={[1, 1, 0.42]} renderOrder={2}>
-      <tubeGeometry args={[curve, 32, 0.016, 10, false]} />
-      <meshPhysicalMaterial color="#fffdf8" roughness={0.32} clearcoat={0.35} clearcoatRoughness={0.35} polygonOffset polygonOffsetFactor={-4} depthWrite={false} />
-    </mesh>
-  )
-}
-
-function Eye({ x }: { x: number }) {
-  return (
-    <group position={[x, 0.1, 0.58]}>
-      <mesh scale={[0.11, 0.13, 0.05]} castShadow>
-        <sphereGeometry args={[1, 36, 28]} />
-        <meshPhysicalMaterial color="#8a4524" roughness={0.18} clearcoat={1} clearcoatRoughness={0.08} polygonOffset polygonOffsetFactor={-2} />
-      </mesh>
-      <mesh position={[-0.028, 0.035, 0.04]} scale={[0.038, 0.046, 0.012]}>
-        <sphereGeometry args={[1, 16, 12]} />
-        <meshBasicMaterial color="#fffefb" />
-      </mesh>
+    <group position={[x, y, faceDepth(x, y) - 0.004]} rotation={[0, side * 0.15, side * -0.045]}>
+      <mesh scale={[0.108, 0.133, 0.046]}><sphereGeometry args={[1, 40, 32]} /><meshPhysicalMaterial color="#663021" roughness={0.24} clearcoat={0.75} clearcoatRoughness={0.12} envMapIntensity={0.5} /></mesh>
+      <mesh position={[-side * 0.005, -0.014, 0.033]} scale={[0.071, 0.091, 0.023]}><sphereGeometry args={[1, 32, 24]} /><meshPhysicalMaterial color="#9c5030" roughness={0.25} clearcoat={0.8} envMapIntensity={0.35} /></mesh>
+      <mesh position={[-side * 0.006, 0.004, 0.05]} scale={[0.047, 0.064, 0.012]}><sphereGeometry args={[1, 32, 24]} /><meshPhysicalMaterial color="#3e201a" roughness={0.12} clearcoat={1} envMapIntensity={0.25} /></mesh>
+      <mesh position={[-0.03, 0.048, 0.05]} scale={[0.028, 0.034, 0.01]}><sphereGeometry args={[1, 24, 16]} /><meshBasicMaterial color="#fff9eb" /></mesh>
+      <mesh position={[0.035, -0.045, 0.05]} scale={0.011}><sphereGeometry args={[1, 16, 12]} /><meshBasicMaterial color="#efbb80" /></mesh>
     </group>
   )
 }
-
-function Ear({ side }: { side: 1 | -1 }) {
+function Ear({ side }: { side: number }) {
   return (
-    <group position={[side * 0.58, 0.28, 0.32]} rotation={[0.05, side * 0.4, side * -0.1]}>
-      <mesh scale={[0.18, 0.18, 0.1]} castShadow>
-        <sphereGeometry args={[1, 26, 18]} />
-        <Glossy color={CREAM} roughness={0.5} />
-      </mesh>
-      <mesh position={[0, -0.005, 0.06]} scale={[0.1, 0.1, 0.04]}>
-        <sphereGeometry args={[1, 20, 14]} />
-        <Glossy color="#f3a7ad" roughness={0.55} />
-      </mesh>
+    <group position={[side * 0.565, 0.41, 0.27]} rotation={[0, side * 0.3, side * -0.25]}>
+      <mesh scale={[0.173, 0.18, 0.11]} castShadow><sphereGeometry args={[1, 40, 28]} /><Satin color={CREAM} /></mesh>
+      <mesh position={[0, 0, 0.085]} scale={[0.091, 0.10, 0.035]}><sphereGeometry args={[1, 32, 24]} /><Satin color="#b97664" roughness={0.6} /></mesh>
     </group>
   )
 }
-
-function Foot() {
-  return (
-    <group position={[0, -0.1, 0.06]}>
-      {/* 脚掌与小腿重叠：掌心顶到腿胶囊底部，消除断缝 */}
-      <mesh scale={[0.17, 0.1, 0.22]} castShadow>
-        <sphereGeometry args={[1, 24, 16]} />
-        <Glossy color={ORANGE_DEEP} roughness={0.4} />
-      </mesh>
-      {[-0.075, 0, 0.075].map(offset => (
-        <mesh key={offset} position={[offset, -0.02, 0.175]} scale={[0.055, 0.05, 0.065]} castShadow>
-          <sphereGeometry args={[1, 16, 12]} />
-          <Glossy color={ORANGE} roughness={0.4} />
-        </mesh>
-      ))}
-    </group>
-  )
-}
-
-function TailTuft({ hot }: { hot: boolean }) {
-  const color = hot ? '#d8654a' : '#b2452f'
-  return (
-    <group rotation={[0.2, 0, 0.4]}>
-      <mesh position={[-0.055, 0.05, 0]} scale={[0.075, 0.075, 0.06]} castShadow>
-        <sphereGeometry args={[1, 18, 12]} />
-        <Glossy color={color} roughness={0.42} />
-      </mesh>
-      <mesh position={[0.055, 0.05, 0]} scale={[0.075, 0.075, 0.06]} castShadow>
-        <sphereGeometry args={[1, 18, 12]} />
-        <Glossy color={color} roughness={0.42} />
-      </mesh>
-      <mesh position={[0, -0.03, 0]} rotation={[0, 0, Math.PI]} scale={[1, 1, 0.8]} castShadow>
-        <coneGeometry args={[0.12, 0.16, 20]} />
-        <Glossy color={color} roughness={0.42} />
-      </mesh>
-    </group>
-  )
+function Nose() {
+  const geometry = useMemo(() => {
+    const shape = new T.Shape()
+    shape.moveTo(-0.083, 0.023)
+    shape.bezierCurveTo(-0.075, 0.06, 0.075, 0.06, 0.083, 0.023)
+    shape.bezierCurveTo(0.083, -0.015, 0.026, -0.05, 0, -0.047)
+    shape.bezierCurveTo(-0.026, -0.05, -0.083, -0.015, -0.083, 0.023)
+    return new T.ExtrudeGeometry(shape, { depth: 0.025, bevelEnabled: true, bevelSegments: 5, steps: 1, bevelSize: 0.018, bevelThickness: 0.018, curveSegments: 20 })
+  }, [])
+  useEffect(() => () => geometry.dispose(), [geometry])
+  return <mesh geometry={geometry} position={[0, -0.067, 0.645]} castShadow><meshPhysicalMaterial color="#7a3b2c" roughness={0.3} clearcoat={0.45} clearcoatRoughness={0.25} /></mesh>
 }
 
 export default function LionModel({ pose, reduced, selected, onSelect }: { pose: PoseId; reduced: boolean; selected: number; onSelect: (id: number) => void }) {
-  const root = useRef<T.Group>(null)
-  const head = useRef<T.Group>(null)
-  const armL = useRef<T.Group>(null)
-  const armR = useRef<T.Group>(null)
-  const legL = useRef<T.Group>(null)
-  const legR = useRef<T.Group>(null)
-  const kneeL = useRef<T.Group>(null)
-  const kneeR = useRef<T.Group>(null)
-  const tail = useRef<T.Group>(null)
-  const mouth = useRef<T.Group>(null)
-  const clock = useRef(0)
-  const hop = useRef(0)
-  const mane = useManeGeometry()
-  const body = useBodyGeometry()
-  const face = useFaceGeometry()
-  const tuft = useTuftGeometry()
-  const tailCurve = useTailCurve()
-  const limb = selected === 4
-
-  useFrame((_, dt) => {
-    const step = Math.min(dt, 0.05)
-    const spec = POSE[pose]
-    const speed = reduced ? 18 : 4.4
-    dampEuler(armL.current, spec.armL, speed, step)
-    dampEuler(armR.current, spec.armR, speed, step)
-    dampEuler(legL.current, spec.legL, speed, step)
-    dampEuler(legR.current, spec.legR, speed, step)
-    dampEuler(kneeL.current, spec.kneeL, speed, step)
-    dampEuler(kneeR.current, spec.kneeR, speed, step)
-    dampEuler(tail.current, spec.tail, speed, step)
-    dampEuler(head.current, spec.head, speed, step)
-    if (root.current) root.current.rotation.y = T.MathUtils.damp(root.current.rotation.y, spec.yaw, speed, step)
-    hop.current = T.MathUtils.damp(hop.current, !reduced && spec.hop ? 1 : 0, 3, step)
-    if (!reduced) clock.current += step
-    const t = clock.current
-    if (root.current) root.current.position.y = 0.16 + Math.sin(t * 1.6) * 0.006
-    if (mouth.current) mouth.current.scale.y = T.MathUtils.damp(mouth.current.scale.y, spec.mouth, speed, step)
-    if (tail.current && !reduced) tail.current.rotation.y += Math.sin(t * 2.1) * 0.002
+  const root = useRef<T.Group>(null), head = useRef<T.Group>(null), eyes = useRef<T.Group>(null)
+  const armL = useRef<T.Group>(null), armR = useRef<T.Group>(null), wristL = useRef<T.Group>(null), wristR = useRef<T.Group>(null)
+  const legL = useRef<T.Group>(null), legR = useRef<T.Group>(null), ankleL = useRef<T.Group>(null), ankleR = useRef<T.Group>(null), tail = useRef<T.Group>(null)
+  const time = useRef(0), lift = useRef(0), sculpt = useSculptures()
+  const tailCurve = useMemo(() => new T.CatmullRomCurve3([
+    new T.Vector3(0, 0, 0), new T.Vector3(0.17, -0.18, -0.06), new T.Vector3(0.39, -0.28, -0.055), new T.Vector3(0.62, -0.15, 0), new T.Vector3(0.75, 0.065, 0.03),
+  ]), [])
+  const interact = (part: number) => ({
+    onClick: (event: ThreeEvent<MouseEvent>) => { if (event.delta < 6) { event.stopPropagation(); onSelect(part) } },
+    onPointerOver: (event: ThreeEvent<PointerEvent>) => { event.stopPropagation(); if (event.nativeEvent.target instanceof HTMLElement) event.nativeEvent.target.style.cursor = 'pointer' },
+    onPointerOut: (event: ThreeEvent<PointerEvent>) => { if (event.nativeEvent.target instanceof HTMLElement) event.nativeEvent.target.style.cursor = 'grab' },
   })
-
+  useEffect(() => () => { document.body.style.cursor = '' }, [])
+  useFrame((_, delta) => {
+    const dt = Math.min(delta, 0.05), spec = POSES[pose]
+    if (!reduced) time.current += dt
+    const t = time.current
+    const pairs: [T.Group | null, Euler3][] = [[head.current, spec.head], [armL.current, spec.armL], [armR.current, spec.armR], [wristL.current, spec.wristL], [wristR.current, spec.wristR], [legL.current, spec.legL], [legR.current, spec.legR], [ankleL.current, spec.ankleL], [ankleR.current, spec.ankleR], [tail.current, spec.tail]]
+    pairs.forEach(([group, angles]) => dampRotation(group, angles, dt, reduced))
+    lift.current = reduced ? spec.lift : T.MathUtils.damp(lift.current, spec.lift, 5, dt)
+    if (root.current) {
+      root.current.rotation.y = reduced ? spec.yaw : T.MathUtils.damp(root.current.rotation.y, spec.yaw, 5, dt)
+      root.current.position.y = 0.135 + lift.current + (reduced ? 0 : Math.sin(t * 1.7) * (pose === 'cheer' ? 0.022 : 0.002))
+    }
+    if (tail.current && !reduced) tail.current.rotation.y += Math.sin(t * 1.8) * 0.007
+    for (const arm of [armL.current, armR.current]) {
+      if (arm) arm.scale.y = reduced ? (pose === 'cheer' ? 1.3 : 1) : T.MathUtils.damp(arm.scale.y, pose === 'cheer' ? 1.3 : 1, 5, dt)
+    }
+    if (eyes.current) {
+      const blink = t % 5.3
+      const amount = !reduced && blink > 4.9 && blink < 5.13 ? Math.sin((blink - 4.9) / 0.23 * Math.PI) : 0
+      eyes.current.scale.y = 1 - amount * 0.94
+    }
+  })
   return (
-    <group ref={root} position={[0, 0.16, 0]}>
-      <group ref={head} position={[0, 1.84, 0.02]}>
-        <mesh geometry={mane} position={[0, 0.06, -0.16]} castShadow receiveShadow>
-          <Glossy color={selected === 0 ? '#ffe9a8' : '#ffffff'} vertexColors roughness={0.34} />
-        </mesh>
-        <mesh geometry={tuft} position={[0, 0.56, 0.16]} rotation={[-0.12, 0, 0.05]} castShadow>
-          <Glossy color={selected === 1 ? '#fff6c8' : '#ffffff'} vertexColors roughness={0.28} />
-        </mesh>
-        <mesh geometry={face} position={[0, -0.02, 0.2]} scale={[0.72, 0.62, 0.55]} castShadow>
-          <Glossy color="#ffffff" vertexColors roughness={0.5} emissive={selected === 2 ? '#ffd8bf' : undefined} emissiveIntensity={selected === 2 ? 0.08 : 0} />
-        </mesh>
-        {([-1, 1] as const).flatMap(side => [-0.06, 0, 0.06].map(dy => (
-          <mesh key={side + '' + dy} position={[side * 0.46, -0.16 + dy * 0.5, 0.6]} scale={0.013}>
-            <sphereGeometry args={[1, 8, 6]} />
-            <meshStandardMaterial color="#d99a5e" roughness={0.6} />
-          </mesh>
-        )))}
-        <Ear side={-1} />
-        <Ear side={1} />
-        <Eye x={-0.24} />
-        <Eye x={0.24} />
-        <mesh position={[0, -0.094, 0.772]} rotation={[0.14, 0, 0]} scale={[0.056, 0.04, 0.012]} castShadow>
-          <sphereGeometry args={[1, 20, 14]} />
-          <meshPhysicalMaterial color="#6b2e22" roughness={0.48} clearcoat={0.1} polygonOffset polygonOffsetFactor={-3} />
-        </mesh>
-        <group ref={mouth} position={[0, -0.3, 0.56]}>
-          <mesh position={[0, 0.01, -0.01]} scale={[0.36, 0.13, 0.05]}>
-            <sphereGeometry args={[1, 28, 18]} />
-            <meshStandardMaterial color="#5c2420" roughness={0.62} polygonOffset polygonOffsetFactor={-1} />
-          </mesh>
-          <ToothBand />
-          <mesh position={[0, -0.035, 0.02]} rotation={[0.35, 0, 0]} scale={[0.24, 0.055, 0.04]} castShadow>
-            <sphereGeometry args={[1, 28, 16]} />
-            <meshPhysicalMaterial color="#e48b92" roughness={0.22} clearcoat={0.72} clearcoatRoughness={0.16} />
-          </mesh>
-          <mesh position={[0, -0.032, 0.038]} scale={[0.012, 0.04, 0.008]}>
-            <sphereGeometry args={[1, 8, 6]} />
-            <meshStandardMaterial color="#c96b74" roughness={0.4} />
-          </mesh>
+    <group ref={root} position={[0, 0.135, 0]}>
+      <group ref={head} position={[0, 1.85, 0.02]}>
+        <mesh geometry={sculpt.mane} position={[0, 0.12, -0.085]} castShadow receiveShadow {...interact(0)}><Satin vertexColors selected={selected === 0} /></mesh>
+        <group {...interact(2)}>
+          <Ear side={-1} /><Ear side={1} />
+          <mesh geometry={sculpt.face} castShadow receiveShadow><Satin vertexColors roughness={0.48} selected={selected === 2} /></mesh>
+          <mesh geometry={sculpt.mouth}><meshStandardMaterial vertexColors roughness={0.75} /></mesh>
+          <mesh position={[0, -0.352, 0.48]} rotation={[0.18, 0, 0]} scale={[0.255, 0.043, 0.05]}><sphereGeometry args={[1, 48, 28]} /><meshPhysicalMaterial color="#db8f80" roughness={0.42} clearcoat={0.25} /></mesh>
+          <group position={[0, 0.19, 0]} ref={eyes}><group position={[0, -0.19, 0]}><Eye side={-1} /><Eye side={1} /></group></group>
+          <Nose />
         </group>
+        <mesh geometry={sculpt.tuft} position={[0, 0.40, 0.5]} rotation={[-0.22, 0, -0.035]} castShadow {...interact(1)}><Satin vertexColors roughness={0.33} selected={selected === 1} /></mesh>
       </group>
-
-      <mesh position={[0, 1.3, 0.02]} scale={[0.34, 0.2, 0.3]} castShadow>
-        <sphereGeometry args={[1, 24, 16]} />
-        <Glossy color={ORANGE} />
-      </mesh>
-      <mesh geometry={body} position={[0, 0.86, 0]} scale={[0.52, 0.55, 0.46]} castShadow receiveShadow>
-        <Glossy color="#ffffff" vertexColors emissive={selected === 3 ? '#ffcf8a' : undefined} emissiveIntensity={selected === 3 ? 0.1 : 0} />
-      </mesh>
-      {/* 奶白肚皮，托在院徽下方 */}
-      <mesh position={[0, 0.74, 0.235]} scale={[0.34, 0.4, 0.26]} castShadow>
-        <sphereGeometry args={[1, 36, 28]} />
-        <Glossy color={CREAM} roughness={0.5} />
-      </mesh>
-      <Emblem />
-
+      <group {...interact(3)}>
+        <mesh position={[0, 1.29, 0]} scale={[0.28, 0.2, 0.25]} castShadow><sphereGeometry args={[1, 32, 24]} /><Satin color={GOLD} /></mesh>
+        <mesh geometry={sculpt.body} position={[0, 0.86, 0]} castShadow receiveShadow><Satin vertexColors selected={selected === 3} /></mesh>
+        <Emblem body={sculpt.body} />
+      </group>
       {([-1, 1] as const).map(side => (
-        <group key={side} ref={side < 0 ? armL : armR} position={[side * 0.5, 1.12, 0.08]} rotation={[-0.18, side * -0.04, side * 0.36]}>
-          <mesh position={[0, -0.22, 0]} castShadow>
-            <capsuleGeometry args={[0.105, 0.26, 8, 16]} />
-            <Glossy color={limb ? '#ffb83c' : ORANGE} />
-          </mesh>
-          <mesh position={[0, -0.48, 0.03]} scale={[0.15, 0.13, 0.13]} castShadow>
-            <sphereGeometry args={[1, 24, 18]} />
-            <Glossy color="#fff7ef" roughness={0.42} />
-          </mesh>
-          <mesh position={[-side * 0.115, -0.445, 0.05]} scale={0.058} castShadow>
-            <sphereGeometry args={[1, 16, 12]} />
-            <Glossy color="#fff7ef" roughness={0.42} />
-          </mesh>
-        </group>
-      ))}
-
-      {([-1, 1] as const).map(side => (
-        <group key={side} ref={side < 0 ? legL : legR} position={[side * 0.18, 0.42, 0.04]} rotation={[0.05, 0, side * 0.05]}>
-          <mesh position={[0, -0.1, 0]} castShadow>
-            <capsuleGeometry args={[0.115, 0.24, 6, 14]} />
-            <Glossy color={limb ? '#ffb83c' : ORANGE} />
-          </mesh>
-          <mesh position={[0, -0.235, 0.015]} scale={[0.14, 0.08, 0.15]} castShadow>
-            <sphereGeometry args={[1, 20, 14]} />
-            <Glossy color={ORANGE} />
-          </mesh>
-          <group ref={side < 0 ? kneeL : kneeR} position={[0, -0.26, 0]}>
-            <Foot />
+        <group key={side} ref={side < 0 ? armL : armR} position={[side * 0.38, 1.13, 0.015]} rotation={side < 0 ? POSES.stand.armL : POSES.stand.armR} {...interact(4)}>
+          <mesh position={[0, -0.17, 0]} castShadow><capsuleGeometry args={[0.10, 0.27, 12, 28]} /><Satin color={GOLD} selected={selected === 4} /></mesh>
+          <group position={[0, -0.36, 0.018]} ref={side < 0 ? wristL : wristR}>
+            <mesh geometry={sculpt.mitten} scale={[-side, 1, 1]} castShadow><Satin color={CREAM} roughness={0.48} /></mesh>
           </group>
         </group>
       ))}
-
-      <group ref={tail} position={[0.28, 0.72, -0.36]}>
-        <mesh scale={[0.1, 0.09, 0.09]} castShadow>
-          <sphereGeometry args={[1, 18, 14]} />
-          <Glossy color={ORANGE_DEEP} />
-        </mesh>
-        <mesh castShadow>
-          <tubeGeometry args={[tailCurve, 36, 0.045, 10, false]} />
-          <Glossy color={ORANGE_DEEP} />
-        </mesh>
-        <group position={[0.8, 0.28, 0]}>
-          <TailTuft hot={selected === 5} />
+      {([-1, 1] as const).map(side => (
+        <group key={side} ref={side < 0 ? legL : legR} position={[side * 0.19, 0.43, 0.025]} {...interact(4)}>
+          <mesh position={[0, -0.105, 0]} castShadow><capsuleGeometry args={[0.112, 0.24, 12, 28]} /><Satin color={GOLD} selected={selected === 4} /></mesh>
+          <group ref={side < 0 ? ankleL : ankleR} position={[0, -0.3, 0.045]}>
+            <mesh geometry={sculpt.paw} position={[0, -0.045, 0.055]} castShadow receiveShadow><Satin color={GOLD} /></mesh>
+          </group>
         </group>
-        <Hit part={5} position={[0.78, 0.26, 0]} scale={[0.26, 0.28, 0.24]} onSelect={onSelect} />
+      ))}
+      <group ref={tail} position={[0.29, 0.66, -0.28]} {...interact(5)}>
+        <mesh castShadow><tubeGeometry args={[tailCurve, 72, 0.035, 16, false]} /><Satin color={GOLD} /></mesh>
+        <mesh geometry={sculpt.tailTip} position={[0.755, 0.14, 0.03]} rotation={[0, 0, -0.2]} castShadow><Satin vertexColors selected={selected === 5} roughness={0.45} /></mesh>
       </group>
-
-      <Hit part={0} position={[0, 1.9, -0.18]} scale={[1.12, 1.05, 0.5]} onSelect={onSelect} />
-      <Hit part={1} position={[0, 2.72, 0.14]} scale={[0.28, 0.42, 0.26]} onSelect={onSelect} />
-      <Hit part={2} position={[0, 1.78, 0.68]} scale={[0.58, 0.46, 0.26]} onSelect={onSelect} />
-      <Hit part={3} position={[0, 0.98, 0.44]} scale={[0.36, 0.3, 0.18]} onSelect={onSelect} />
-      <Hit part={4} position={[-0.72, 0.7, 0.16]} scale={[0.3, 0.5, 0.3]} onSelect={onSelect} />
-      <Hit part={4} position={[0.72, 0.7, 0.16]} scale={[0.3, 0.5, 0.3]} onSelect={onSelect} />
-      <Hit part={4} position={[0, 0.18, 0.14]} scale={[0.52, 0.26, 0.34]} onSelect={onSelect} />
     </group>
   )
 }

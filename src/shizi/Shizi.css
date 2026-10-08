@@ -23,6 +23,13 @@ html.sz-document,html.sz-document body{margin:0!important;background:#3a332c!imp
 .sz-help{max-width:470px;width:calc(100% - 40px);padding:0;border:1px solid #8a735c;border-radius:9px;background:#3a3128;color:#f7f0e4;font-family:"SimSun",serif;box-shadow:0 28px 110px rgba(0,0,0,.5)}.sz-help::backdrop{background:rgba(22,16,12,.76);backdrop-filter:blur(8px)}.sz-help>div{position:relative;padding:38px}.sz-help-close{position:absolute;top:14px;right:14px}.sz-help h2{font-weight:400;font-size:23px;margin:24px 0 15px}.sz-help p{font-size:13px;line-height:1.85;color:#e6d5bf}.sz-help dl{margin:27px 0}.sz-help dl>div{margin-bottom:19px}.sz-help dt{color:#f0d7a4;font-size:13px}.sz-help dd{margin:7px 0 0;color:#d9cbb8;font-size:12px;line-height:1.8}.sz-help small{color:#b7a48e;font-size:10px}.sz-help-enter{display:flex;align-items:center;justify-content:center;gap:16px;padding:13px 20px;width:100%;margin-top:27px;border:1px solid #c4842a;background:#6a4a28;color:#fff6e8;font-size:14px}.sz-notice{position:absolute;z-index:30;bottom:160px;left:50%;transform:translateX(-50%);padding:13px 20px;background:#5c4a34;color:#fff6e8;font-size:13px;max-width:80vw;border:1px solid #e7c27a}
 @keyframes szStoryIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}@keyframes szBreathe{to{opacity:.35}}
 .sz-mobile-help{display:none}
+.sz-setting{position:absolute;z-index:6;right:4%;top:150px;display:flex;gap:16px;align-items:center;font-family:system-ui,sans-serif}
+.sz-setting button{padding:8px 0;background:none;border:0;border-bottom:1px solid transparent;color:var(--sz-muted);font-size:11px;letter-spacing:.06em;transition:color .2s,border-color .2s}
+.sz-setting button[aria-pressed=true]{color:var(--sz-gold);border-bottom-color:var(--sz-gold)}
+.sz-setting button:hover{color:var(--sz-ivory)}
+.sz-scene[data-studio=true]{--sz-bg-rgb:58,51,44;background:#3a332c}
+.sz-scene[data-studio=true] .sz-atmosphere{background:linear-gradient(90deg,#3a332c 0%,rgba(58,51,44,.96) 16%,rgba(58,51,44,.65) 27%,transparent 45%),linear-gradient(0deg,rgba(28,22,16,.74),transparent 17%,transparent 86%,rgba(28,22,16,.28))}
+@media(max-width:900px){.sz-setting{top:90px;right:24px;gap:14px}.sz-setting button{font-size:10px}}
 @media(min-width:1500px){.sz-story{top:23%;width:23%}.sz-description{font-size:13px}.sz-chapter-title h2{font-size:32px}.sz-brand strong{font-size:36px}.sz-dock{left:58%;bottom:86px}}
 @media(max-height:950px) and (min-width:901px){.sz-story{top:21%}.sz-intro h1{font-size:46px;line-height:1.4;margin:12px 0}.sz-intro-line{margin:23px 0 20px}.sz-chapter-english{margin-bottom:13px}.sz-description{font-size:11px}.sz-pagination{margin-top:8px}.sz-dock{bottom:65px}}
 @media(max-width:1100px) and (min-width:901px){.sz-story{left:4%;width:26%}.sz-brand strong{font-size:27px}.sz-time-switch button{padding:8px 13px}.sz-view-controls button{padding:10px 12px}.sz-compass{right:4%;transform:scale(.75);transform-origin:right bottom}.sz-instructions{display:none}.sz-intro h1{font-size:42px}}
@@ -31,3 +38,13 @@ html.sz-document,html.sz-document body{margin:0!important;background:#3a332c!imp
 @media(max-width:360px){.sz-brand small{display:none}.sz-time-switch button{padding:7px}.sz-seal{width:31px;height:38px;font-size:25px}.sz-view-controls button{gap:4px;padding:6px 8px}.sz-view-controls button svg{width:15px}.sz-dock{gap:5px}.sz-reset{width:41px;height:41px}.sz-destination{font-size:10px}.sz-poem{font-size:11px}}
 @media(prefers-reduced-motion:reduce){.sz-scene *{animation:none!important;transition:none!important}}
 @media(max-height:740px) and (min-width:901px){.sz-description{display:none}.sz-intro-line{margin:16px 0}.sz-intro h1{font-size:38px}.sz-story{top:20%}}
+
+@media(max-width:900px){.sz-scene[data-studio=true] .sz-atmosphere{background:linear-gradient(0deg,rgba(var(--sz-bg-rgb),1) 0%,rgba(var(--sz-bg-rgb),.96) 22%,transparent 44%,transparent 80%,rgba(var(--sz-bg-rgb),.65))}}
+@media(max-width:900px){
+  .sz-dock{width:calc(100% - 32px);max-width:460px;bottom:49px;gap:7px}
+  .sz-view-controls{flex:1;min-width:0;padding:5px 7px}
+  .sz-view-controls button{flex:1;min-width:0;flex-direction:column;gap:4px;padding:5px 3px;min-height:43px;font-size:10px;line-height:1.2;letter-spacing:0}
+  .sz-dock-divider{margin:0 4px;height:26px}
+  .sz-reset{flex-shrink:0;width:42px;height:42px}
+  .sz-story{bottom:132px}
+}
