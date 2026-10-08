@@ -138,7 +138,6 @@ export default function Shizi() {
         <button className="sz-reset" onClick={reset} aria-label="重置视角" title="重置视角 · R"><RotateCcw size={22} /></button>
       </nav>
       <div className="sz-footer">
-        <a href="https://zzcspace.com/" className="sz-back"><ArrowLeft size={13} /><span>返回首页</span></a>
         <span className="sz-instructions"><Mouse size={18} />拖拽旋转<span>·</span>滚轮缩放<span>·</span>点击狮子探索</span>
         <span className="sz-signature">鬃展成轮 · 笑意成光</span>
         <div className="sz-utility">
