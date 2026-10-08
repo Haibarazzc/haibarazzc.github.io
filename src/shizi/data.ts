@@ -11,13 +11,6 @@ export const features = [
   { name: '尾穗', en: 'TAIL TUFT', note: '尾巴', copy: '尾尖一束深色，把身影收住。', detail: '细尾从身侧绕出，末梢是一撮更深的橙红。正视图里它露在右侧，转过去才能看清整条弧线。', point: [1.05, 1.15, -0.36] as [number, number, number], camera: [2.4, 1.5, -1.9] as [number, number, number] },
 ] as const
 
-export const links = [
-  { label: '认识曾子丞', url: 'https://zzcspace.com/portfolio/about/', note: '关于我' },
-  { label: '返回首页', url: 'https://zzcspace.com/', note: '门户' },
-  { label: '打开校园地图', url: 'https://zzcspace.com/portfolio/map/', note: '南科大' },
-  { label: '听一首歌', url: 'https://zzcspace.com/portfolio/music/', note: '音乐馆' },
-  { label: '阅读博客', url: 'https://zzcspace.com/portfolio/blog/', note: '文章' },
-] as const
 
 export const poses = {
   stand: { label: '静立', sub: '六视之静', background: '#3a332c', sun: '#fff0d0', sunPower: 2.8, ambient: 0.72, lamp: 0.4, exposure: 1.02, position: [3.4, 6.4, 4.6] as [number, number, number] },

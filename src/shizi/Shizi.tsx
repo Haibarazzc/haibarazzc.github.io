@@ -1,6 +1,6 @@
 import { Component, Suspense, lazy, useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { ArrowLeft, ArrowUpRight, Box, ChevronLeft, ChevronRight, Compass, Eye, HelpCircle, Layers, Maximize2, Minimize2, Mouse, MoveHorizontal, Pause, RotateCcw, RotateCw, Scan, Smile, Sparkles, Volume2, VolumeX, X } from 'lucide-react'
-import { features, links, poses, type CameraShot, type PoseId, type ViewMode } from './data'
+import { features, poses, type CameraShot, type PoseId, type ViewMode } from './data'
 import './Shizi.css'
 
 const World = lazy(() => import('./World'))
@@ -29,7 +29,6 @@ export default function Shizi() {
   const helpButton = useRef<HTMLButtonElement>(null)
   const audio = useRef<AudioContext | null>(null)
   const feature = features[selected]
-  const link = links[selected]
   const select = useCallback((id: number) => { setSelected(id); setAuto(false); setShot(s => ({ mode: s.mode, focus: id, revision: s.revision + 1 })) }, [])
   const view = useCallback((mode: ViewMode) => { setAuto(false); setShot(s => ({ mode, focus: null, revision: s.revision + 1 })) }, [])
   const reset = useCallback(() => { setSelected(0); setPose('stand'); view('overview') }, [view])
@@ -117,13 +116,11 @@ export default function Shizi() {
             <span className="sz-chapter-english">{feature.en}</span>
             <p className="sz-poem">{feature.copy}</p>
             <p className="sz-description">{feature.detail}</p>
-            <a className="sz-destination" href={link.url}>{link.label}<ArrowUpRight size={14} /></a>
           </div>
           <div className="sz-pagination">
             <button className="sz-icon" aria-label="上一处" onClick={() => select((selected + 5) % 6)}><ChevronLeft size={18} /></button>
             <span>{String(selected + 1).padStart(2, '0')} <i>—</i> 06</span>
             <button className="sz-icon" aria-label="下一处" onClick={() => select((selected + 1) % 6)}><ChevronRight size={18} /></button>
-            <span className="sz-chapter-type">{link.note}</span>
           </div>
         </section>
         <div className="sz-building-index" role="group" aria-label="六处设计">
