@@ -101,7 +101,7 @@ export default function Shizi() {
       <div className="sz-atmosphere" aria-hidden="true" />
       {!ready && <div className="sz-loading" role="status"><span className="sz-loading-seal">狮</span><p>等一只狮子，走到光里</p></div>}
       <header className="sz-header">
-        <a className="sz-brand" href="https://zzcspace.com/" aria-label="狮小新，返回 zzcspace.com"><span className="sz-seal">狮</span><span><strong>狮小新</strong><small>ZHIXIN · MASCOT</small></span></a>
+        <a className="sz-brand" href="https://mp.weixin.qq.com/s/xlnyHPGfobb3b-zd5unvpA" aria-label="狮小新，阅读微信公众号文章"><span className="sz-seal">狮</span><span><strong>狮小新</strong><small>ZHIXIN · MASCOT</small></span></a>
         <div className="sz-header-right">
           <div className="sz-time-switch" role="group" aria-label="狮子姿态">
             {poseItems.map(({ id, Icon }) => <button key={id} aria-pressed={pose === id} onClick={() => setPose(id)}><Icon size={15} /><span>{poses[id].label}</span></button>)}
