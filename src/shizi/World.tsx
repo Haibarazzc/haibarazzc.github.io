@@ -1,19 +1,18 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { ContactShadows, Environment, Lightformer, OrbitControls } from '@react-three/drei'
+import { Environment, Html, Lightformer, OrbitControls } from '@react-three/drei'
 import { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import * as T from 'three'
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js'
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js'
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js'
-import LionModel, { getFeatureFraming } from './LionModel'
+import LionModel from './LionModel'
 import { buildSakuraGrove } from './sakuraGrove'
-import { poses, type CameraShot, type PoseId, type ViewMode } from './data'
+import { features, poses, type CameraShot, type PoseId, type ViewMode } from './data'
 
 export type WorldProps = {
   pose: PoseId
-  studio: boolean
   shot: CameraShot
   selected: number
   auto: boolean
@@ -25,17 +24,16 @@ export type WorldProps = {
 }
 
 const shots: Record<ViewMode, { pos: [number, number, number]; at: [number, number, number] }> = {
-  overview: { pos: [1.9, 2.05, 7.2], at: [0, 1.55, 0] },
+  overview: { pos: [2.7, 1.75, 6.5], at: [0, 1.55, 0] },
   front: { pos: [0, 1.65, 6.6], at: [0, 1.55, 0] },
   side: { pos: [6.6, 1.6, 0.12], at: [0, 1.55, 0] },
   top: { pos: [0.08, 7.4, 0.3], at: [0, 0.2, 0] },
 }
 
-function Cinema({ pose, studio }: { pose: PoseId; studio: boolean }) {
+function Cinema({ pose }: { pose: PoseId }) {
   const { gl, scene, camera, size } = useThree()
   const pipeline = useMemo(() => {
-    const target = new T.WebGLRenderTarget(1, 1, { type: T.HalfFloatType, samples: Math.min(4, gl.capabilities.maxSamples) })
-    const composer = new EffectComposer(gl, target)
+    const composer = new EffectComposer(gl)
     const render = new RenderPass(scene, camera)
     const bloom = new UnrealBloomPass(new T.Vector2(1, 1), 0.08, 0.4, 0.94)
     const output = new OutputPass()
@@ -47,25 +45,23 @@ function Cinema({ pose, studio }: { pose: PoseId; studio: boolean }) {
   useEffect(() => { pipeline.composer.setSize(size.width, size.height) }, [pipeline, size])
   useEffect(() => () => { pipeline.composer.dispose(); pipeline.bloom.dispose(); pipeline.render.dispose(); pipeline.output.dispose() }, [pipeline])
   useFrame((_, dt) => {
-    gl.toneMappingExposure = T.MathUtils.damp(gl.toneMappingExposure, (studio ? 0.9 : poses[pose].exposure), 2, dt)
-    pipeline.bloom.strength = T.MathUtils.damp(pipeline.bloom.strength, studio ? 0 : pose === 'cheer' ? 0.1 : 0.035, 2, dt)
-    pipeline.bloom.enabled = !studio
+    gl.toneMappingExposure = T.MathUtils.damp(gl.toneMappingExposure, poses[pose].exposure, 2, dt)
+    pipeline.bloom.strength = T.MathUtils.damp(pipeline.bloom.strength, pose === 'cheer' ? 0.14 : pose === 'glance' ? 0.1 : 0.07, 2, dt)
     pipeline.composer.render(dt)
   }, 1)
   return null
 }
 
-function CameraRig({ pose, shot, auto, reduced, onManual, onBearing }: Pick<WorldProps, 'pose' | 'shot' | 'auto' | 'reduced' | 'onManual' | 'onBearing'>) {
+function CameraRig({ shot, auto, reduced, onManual, onBearing }: Pick<WorldProps, 'shot' | 'auto' | 'reduced' | 'onManual' | 'onBearing'>) {
   const controls = useRef<OrbitControlsImpl>(null)
   const { camera, size } = useThree()
   const destination = useRef(new T.Vector3(...shots.overview.pos))
   const target = useRef(new T.Vector3(...shots.overview.at))
   const moving = useRef(false)
   const lastBearing = useRef(0)
-  const focusPose = shot.focus === null ? 'stand' : pose
   useEffect(() => {
     const framed = shot.focus !== null
-      ? getFeatureFraming(focusPose, shot.focus)
+      ? { pos: features[shot.focus].camera, at: features[shot.focus].point }
       : shots[shot.mode]
     const pos = new T.Vector3(...framed.pos)
     const at = new T.Vector3(...framed.at)
@@ -77,7 +73,7 @@ function CameraRig({ pose, shot, auto, reduced, onManual, onBearing }: Pick<Worl
       controls.current?.target.copy(at)
       controls.current?.update()
     } else moving.current = true
-  }, [shot, focusPose, camera, reduced, size.width, size.height])
+  }, [shot, camera, reduced, size.width, size.height])
   useFrame((_, dt) => {
     if (!controls.current) return
     controls.current.autoRotate = auto && !moving.current && !reduced && shot.focus === null
@@ -94,14 +90,14 @@ function CameraRig({ pose, shot, auto, reduced, onManual, onBearing }: Pick<Worl
   return <OrbitControls ref={controls} makeDefault enablePan={false} enableDamping dampingFactor={0.075} minDistance={1.7} maxDistance={12} minPolarAngle={0.18} maxPolarAngle={Math.PI / 2 + 0.08} autoRotateSpeed={0.55} rotateSpeed={0.65} zoomSpeed={0.75} onStart={() => { moving.current = false; onManual() }} target={[0, 1.4, 0]} />
 }
 
-function Atmosphere({ pose, studio }: { pose: PoseId; studio: boolean }) {
+function Atmosphere({ pose }: { pose: PoseId }) {
   const sun = useRef<T.DirectionalLight>(null)
   const fill = useRef<T.HemisphereLight>(null)
   const { scene } = useThree()
   const settings = poses[pose]
-  const targetColor = useMemo(() => new T.Color(studio ? '#3a332c' : settings.background), [settings, studio])
-  const sunColor = useMemo(() => new T.Color(studio ? '#fff6e8' : settings.sun), [settings, studio])
-  const sunPosition = useMemo(() => new T.Vector3(...(studio ? [-3.5, 6, 5] as const : settings.position)), [settings, studio])
+  const targetColor = useMemo(() => new T.Color(settings.background), [settings])
+  const sunColor = useMemo(() => new T.Color(settings.sun), [settings])
+  const sunPosition = useMemo(() => new T.Vector3(...settings.position), [settings])
   useEffect(() => { scene.background = new T.Color(settings.background); scene.fog = new T.Fog(settings.background, 9, 22); return () => { scene.fog = null } }, [scene])
   useFrame((_, dt) => {
     if (!(scene.background instanceof T.Color)) scene.background = targetColor.clone()
@@ -110,16 +106,15 @@ function Atmosphere({ pose, studio }: { pose: PoseId; studio: boolean }) {
     if (sun.current) {
       sun.current.color.lerp(sunColor, dt * 2)
       sun.current.position.lerp(sunPosition, 1 - Math.exp(-dt * 1.7))
-      sun.current.intensity = T.MathUtils.damp(sun.current.intensity, (studio ? 2.1 : settings.sunPower), 2, dt)
+      sun.current.intensity = T.MathUtils.damp(sun.current.intensity, settings.sunPower, 2, dt)
     }
-    if (fill.current) fill.current.intensity = T.MathUtils.damp(fill.current.intensity, (studio ? 0.95 : settings.ambient), 2, dt)
+    if (fill.current) fill.current.intensity = T.MathUtils.damp(fill.current.intensity, settings.ambient, 2, dt)
   })
   return (
     <>
-      <hemisphereLight ref={fill} args={['#fff4eb', '#635248', settings.ambient]} />
-      <directionalLight ref={sun} position={settings.position} intensity={settings.sunPower} color={settings.sun} castShadow={!studio} shadow-mapSize={[2048, 2048]} shadow-camera-left={-7} shadow-camera-right={7} shadow-camera-top={7} shadow-camera-bottom={-7} shadow-camera-near={0.5} shadow-camera-far={30} shadow-bias={-0.0001} shadow-normalBias={0.015} shadow-radius={4} />
-      <directionalLight position={[-3, 4, -2]} intensity={0.7} color="#fff0da" />
-      <directionalLight position={[2, 2.6, 5]} intensity={studio ? 0.8 : 0.35} color="#ebefff" />
+      <hemisphereLight ref={fill} args={['#ffe7c4', '#3a2c22', settings.ambient]} />
+      <directionalLight ref={sun} position={settings.position} intensity={settings.sunPower} color={settings.sun} castShadow shadow-mapSize={[2048, 2048]} shadow-camera-left={-7} shadow-camera-right={7} shadow-camera-top={7} shadow-camera-bottom={-7} shadow-camera-near={0.5} shadow-camera-far={30} shadow-bias={-0.00015} shadow-normalBias={0.02} />
+      <directionalLight position={[-3, 4, -2]} intensity={0.7} color="#ffd7a4" />
       <Environment resolution={128} frames={1}>
         <Lightformer form="rect" intensity={2.2} color="#fff3dc" position={[0, 5, 4]} rotation={[-Math.PI / 3, 0, 0]} scale={[8, 4, 1]} />
         <Lightformer form="rect" intensity={1.1} color="#ffe2b8" position={[-6, 2, 1]} rotation={[0, Math.PI / 2, 0]} scale={[6, 3, 1]} />
@@ -383,42 +378,25 @@ function Stage({ pose, reduced }: { pose: PoseId; reduced: boolean }) {
   )
 }
 
-function StudioStage({ pose, reduced }: { pose: PoseId; reduced: boolean }) {
-  const profile = useMemo(() => [
-    new T.Vector2(0, 0.015), new T.Vector2(1.48, 0.015), new T.Vector2(1.53, 0.035),
-    new T.Vector2(1.55, 0.065), new T.Vector2(1.55, 0.1), new T.Vector2(1.52, 0.14),
-    new T.Vector2(1.48, 0.145), new T.Vector2(0, 0.145),
-  ], [])
-  return (
-    <group>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.005, 0]} receiveShadow>
-        <planeGeometry args={[100, 100]} /><meshStandardMaterial color="#3a332c" roughness={0.95} />
-      </mesh>
-      <ContactShadows key={pose} position={[0, 0.15, 0]} opacity={0.7} scale={7} blur={1.8} far={4} resolution={512} frames={reduced ? 2 : 80} color="#291e15" />
-      <mesh receiveShadow castShadow><latheGeometry args={[profile, 128]} /><meshPhysicalMaterial color="#675447" roughness={0.62} clearcoat={0.15} /></mesh>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.149, 0]}>
-        <ringGeometry args={[1.36, 1.372, 160]} /><meshStandardMaterial color="#bda16b" roughness={0.48} metalness={0.35} />
-      </mesh>
-    </group>
-  )
-}
-
 function Scene(props: WorldProps) {
   useEffect(() => { props.onReady() }, [props.onReady])
   return (
     <>
-      <Atmosphere pose={props.pose} studio={props.studio} />
-      {props.studio ? <StudioStage pose={props.pose} reduced={props.reduced} /> : <Stage pose={props.pose} reduced={props.reduced} />}
+      <Atmosphere pose={props.pose} />
+      <Stage pose={props.pose} reduced={props.reduced} />
       <LionModel pose={props.pose} reduced={props.reduced} selected={props.selected} onSelect={props.onSelect} />
-      <CameraRig pose={props.pose} shot={props.shot} auto={props.auto} reduced={props.reduced} onManual={props.onManual} onBearing={props.onBearing} />
-      <Cinema pose={props.pose} studio={props.studio} />
+      <Html position={[features[props.selected].point[0], features[props.selected].point[1] + 0.35, features[props.selected].point[2]]} center zIndexRange={[5, 0]} style={{ pointerEvents: 'none' }}>
+        <div className="sz-pin"><span>{String(props.selected + 1).padStart(2, '0')}</span>{features[props.selected].name}</div>
+      </Html>
+      <CameraRig shot={props.shot} auto={props.auto} reduced={props.reduced} onManual={props.onManual} onBearing={props.onBearing} />
+      <Cinema pose={props.pose} />
     </>
   )
 }
 
 export default function World(props: WorldProps) {
   return (
-    <Canvas shadows dpr={[1, 1.5]} camera={{ position: shots.overview.pos, fov: 36, near: 0.1, far: 40 }} gl={{ antialias: true, alpha: true, powerPreference: 'high-performance' }} onCreated={({ gl }) => { gl.toneMapping = T.ACESFilmicToneMapping; gl.toneMappingExposure = 1.06; gl.shadowMap.type = T.PCFShadowMap; gl.domElement.style.cursor = 'grab' }}>
+    <Canvas shadows dpr={[1, 1.5]} camera={{ position: shots.overview.pos, fov: 36, near: 0.1, far: 40 }} gl={{ antialias: true, alpha: false, powerPreference: 'high-performance' }} onCreated={({ gl }) => { gl.toneMapping = T.ACESFilmicToneMapping; gl.toneMappingExposure = 1.06; gl.shadowMap.type = T.PCFShadowMap; gl.domElement.style.cursor = 'grab' }}>
       <Scene {...props} />
     </Canvas>
   )
