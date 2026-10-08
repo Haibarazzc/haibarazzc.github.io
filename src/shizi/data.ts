@@ -12,7 +12,6 @@ export const features = [
 ] as const
 
 export const links = [
-  { label: '走进樱花古境', url: 'https://zzcspace.com/portfolio/qixia/', note: '另一座三维庭院' },
   { label: '认识曾子丞', url: 'https://zzcspace.com/portfolio/about/', note: '关于我' },
   { label: '返回首页', url: 'https://zzcspace.com/', note: '门户' },
   { label: '打开校园地图', url: 'https://zzcspace.com/portfolio/map/', note: '南科大' },
