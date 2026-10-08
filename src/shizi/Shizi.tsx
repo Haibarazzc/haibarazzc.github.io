@@ -18,6 +18,7 @@ export default function Shizi() {
   const [pose, setPose] = useState<PoseId>('stand')
   const [selected, setSelected] = useState(0)
   const [shot, setShot] = useState<CameraShot>({ mode: 'overview', focus: null, revision: 0 })
+  const [studio, setStudio] = useState(true)
   const [auto, setAuto] = useState(false)
   const [ready, setReady] = useState(false)
   const [bearing, setBearing] = useState(0)
@@ -90,18 +91,18 @@ export default function Shizi() {
     } catch { await audio.current?.close(); audio.current = null; setNotice('环境音暂时无法播放，请稍后重试。') }
   }
   return (
-    <div className={`sz-scene sz-${pose}`} data-ready={ready}>
+    <div className={`sz-scene sz-${pose}`} data-ready={ready} data-studio={studio}>
       <div className="sz-world" aria-label="可拖拽旋转、滚轮缩放的致新书院狮子吉祥物">
         <SceneBoundary onError={onReady}>
           <Suspense fallback={null}>
-            <World pose={pose} shot={shot} selected={selected} auto={auto} reduced={reduced} onSelect={select} onManual={manual} onBearing={setBearing} onReady={onReady} />
+            <World studio={studio} pose={pose} shot={shot} selected={selected} auto={auto} reduced={reduced} onSelect={select} onManual={manual} onBearing={setBearing} onReady={onReady} />
           </Suspense>
         </SceneBoundary>
       </div>
       <div className="sz-atmosphere" aria-hidden="true" />
       {!ready && <div className="sz-loading" role="status"><span className="sz-loading-seal">狮</span><p>等一只狮子，走到光里</p></div>}
       <header className="sz-header">
-        <a className="sz-brand" href="https://zzcspace.com/" aria-label="狮小新，返回 zzcspace.com"><span className="sz-seal">狮</span><span><strong>狮小新</strong><small>ZHIXIN · MASCOT</small></span></a>
+        <a className="sz-brand" href="https://mp.weixin.qq.com/s/xlnyHPGfobb3b-zd5unvpA" target="_blank" rel="noopener noreferrer" aria-label="狮小新，查看公众号文章"><span className="sz-seal">狮</span><span><strong>狮小新</strong><small>ZHIXIN · MASCOT</small></span></a>
         <div className="sz-header-right">
           <div className="sz-time-switch" role="group" aria-label="狮子姿态">
             {poseItems.map(({ id, Icon }) => <button key={id} aria-pressed={pose === id} onClick={() => setPose(id)}><Icon size={15} /><span>{poses[id].label}</span></button>)}
@@ -121,7 +122,7 @@ export default function Shizi() {
           </div>
           <div className="sz-pagination">
             <button className="sz-icon" aria-label="上一处" onClick={() => select((selected + 5) % 6)}><ChevronLeft size={18} /></button>
-            <span>{String(selected + 1).padStart(2, '0')} <i>—</i> 06</span>
+            <span>{String(selected + 1).padStart(2, '0')} <i>/</i> 06</span>
             <button className="sz-icon" aria-label="下一处" onClick={() => select((selected + 1) % 6)}><ChevronRight size={18} /></button>
             <span className="sz-chapter-type">{link.note}</span>
           </div>
@@ -130,7 +131,10 @@ export default function Shizi() {
           {features.map((item, i) => <button key={item.name} aria-label={item.name} aria-pressed={selected === i} title={item.name} onClick={() => select(i)}><span>{String(i + 1).padStart(2, '0')}</span><i /></button>)}
         </div>
       </aside>
-      <div className="sz-world-caption" aria-hidden="true"><span>{poses[pose].sub}</span><i /><small>静立可观 · 欢呼可近</small></div>
+      <div className="sz-setting" role="group" aria-label="展示环境">
+        <button aria-pressed={studio} onClick={() => setStudio(true)}>纯色展台</button>
+        <button aria-pressed={!studio} onClick={() => setStudio(false)}>樱花庭院</button>
+      </div>
       <div className="sz-compass" aria-hidden="true"><span>北</span><div><i style={{ transform: `rotate(${-bearing}deg)` }} /><b>西</b><b>东</b></div><span>南</span></div>
       <nav className="sz-dock" aria-label="镜头控制">
         <div className="sz-view-controls">
