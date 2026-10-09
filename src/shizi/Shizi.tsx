@@ -11,7 +11,7 @@ class SceneBoundary extends Component<{ children: ReactNode; onError: () => void
   state = { failed: false }
   static getDerivedStateFromError() { return { failed: true } }
   componentDidCatch() { this.props.onError() }
-  render() { return this.state.failed ? <div className="sz-unavailable"><Compass size={34} /><h2>狮子暂时没有走出来。</h2><p>三维场景未能启动，请启用浏览器硬件加速后重试。你仍可通过左侧目录阅读各处设计。</p><button onClick={() => location.reload()}>重新载入</button></div> : this.props.children }
+  render() { return this.state.failed ? <div className="sz-unavailable"><Compass size={34} /><h2>狮子暂时没有走出来。</h2><p>模型或三维场景未能载入，请检查网络连接与浏览器硬件加速后重试。你仍可通过左侧目录阅读各处设计。</p><button onClick={() => location.reload()}>重新载入</button></div> : this.props.children }
 }
 
 export default function Shizi() {
@@ -31,6 +31,7 @@ export default function Shizi() {
   const feature = features[selected]
   const select = useCallback((id: number) => { setSelected(id); setAuto(false); setShot(s => ({ mode: s.mode, focus: id, revision: s.revision + 1 })) }, [])
   const view = useCallback((mode: ViewMode) => { setAuto(false); setShot(s => ({ mode, focus: null, revision: s.revision + 1 })) }, [])
+  const choosePose = useCallback((next: PoseId) => { setPose(next); view(next === 'glance' ? 'side' : 'overview') }, [view])
   const reset = useCallback(() => { setSelected(0); setPose('stand'); view('overview') }, [view])
   const onReady = useCallback(() => setReady(true), [])
   const manual = useCallback(() => setAuto(false), [])
@@ -58,11 +59,11 @@ export default function Shizi() {
       if (event.key === '3') view('side')
       if (event.key === '4') view('top')
       if (event.key.toLowerCase() === 'r') reset()
-      if (event.key.toLowerCase() === 't') setPose(p => p === 'stand' ? 'cheer' : p === 'cheer' ? 'glance' : 'stand')
+      if (event.key.toLowerCase() === 't') choosePose(pose === 'stand' ? 'cheer' : pose === 'cheer' ? 'glance' : 'stand')
     }
     window.addEventListener('keydown', key)
     return () => window.removeEventListener('keydown', key)
-  }, [selected, select, view, reset])
+  }, [selected, select, view, reset, pose, choosePose])
   useEffect(() => { if (!notice) return; const id = setTimeout(() => setNotice(''), 4500); return () => clearTimeout(id) }, [notice])
   async function toggleFullscreen() { try { if (document.fullscreenElement) await document.exitFullscreen(); else await document.documentElement.requestFullscreen() } catch { setNotice('当前浏览器不支持全屏，可直接在页面中观看。') } }
   async function toggleSound() {
@@ -102,14 +103,14 @@ export default function Shizi() {
       <header className="sz-header">
         <a className="sz-brand" href="https://mp.weixin.qq.com/s/xlnyHPGfobb3b-zd5unvpA" aria-label="狮小新，阅读微信公众号文章"><span className="sz-seal">狮</span><span><strong>狮小新</strong><small>ZHIXIN · MASCOT</small></span></a>
         <div className="sz-header-right">
-          <div className="sz-time-switch" role="group" aria-label="狮子姿态">
-            {poseItems.map(({ id, Icon }) => <button key={id} aria-pressed={pose === id} onClick={() => setPose(id)}><Icon size={15} /><span>{poses[id].label}</span></button>)}
+          <div className="sz-time-switch" role="group" aria-label="展示场景">
+            {poseItems.map(({ id, Icon }) => <button key={id} aria-pressed={pose === id} onClick={() => choosePose(id)}><Icon size={15} /><span>{poses[id].label}</span></button>)}
           </div>
           <button ref={helpButton} className="sz-icon" aria-label="操作指南" onClick={e => { helpButton.current = e.currentTarget; dialog.current?.showModal() }}><HelpCircle size={18} /></button>
         </div>
       </header>
       <aside className="sz-story">
-        <div className="sz-intro"><span className="sz-edition"><i /> 南科大 · 致新书院</span><h1>一头小狮，<br />一院朝气。</h1><p>照着六视图，把吉祥物站进光里。</p><div className="sz-intro-line" /></div>
+        <div className="sz-intro"><span className="sz-edition"><i /> 南科大 · 致新书院</span><h1>一头小狮，<br />一院朝气。</h1><p>把狮小新原型，放进一庭春光。</p><div className="sz-intro-line" /></div>
         <section className="sz-chapter" aria-label="当前部位" aria-live="polite">
           <div key={selected} className="sz-chapter-content">
             <div className="sz-chapter-title"><span>{String(selected + 1).padStart(2, '0')} <i>/</i></span><h2>{feature.name}</h2></div>
@@ -127,7 +128,7 @@ export default function Shizi() {
           {features.map((item, i) => <button key={item.name} aria-label={item.name} aria-pressed={selected === i} title={item.name} onClick={() => select(i)}><span>{String(i + 1).padStart(2, '0')}</span><i /></button>)}
         </div>
       </aside>
-      <div className="sz-world-caption" aria-hidden="true"><span>{poses[pose].sub}</span><i /><small>静立可观 · 欢呼可近</small></div>
+      <div className="sz-world-caption" aria-hidden="true"><span>{poses[pose].sub}</span><i /><small>原型入景 · 六面可观</small></div>
       <div className="sz-compass" aria-hidden="true"><span>北</span><div><i style={{ transform: `rotate(${-bearing}deg)` }} /><b>西</b><b>东</b></div><span>南</span></div>
       <nav className="sz-dock" aria-label="镜头控制">
         <div className="sz-view-controls">
@@ -151,14 +152,14 @@ export default function Shizi() {
         <div>
           <button className="sz-icon sz-help-close" aria-label="关闭操作指南" onClick={() => dialog.current?.close()}><X size={20} /></button>
           <Compass size={32} />
-          <h2>六面看狮，姿态可换。</h2>
-          <p>这只狮子依照致新书院吉祥物的立体六视图搭建：金黄日轮鬃、白脸笑意、胸口院名，以及静立与举臂两套姿态。回望是在侧视之外补的一个转身分镜。</p>
+          <h2>六面看狮，光影可换。</h2>
+          <p>这只狮子保留原型的日轮鬃、圆脸笑意与短肢细尾，补上暖橙配色和胸口院徽。静立欣赏完整造型，暖阳切换温暖光照，回望从侧面观察轮廓。</p>
           <dl>
             <div><dt>转动与靠近</dt><dd>鼠标拖拽 / 单指滑动旋转，滚轮 / 双指捏合缩放。</dd></div>
             <div><dt>看一处设计</dt><dd>点击狮子或六处目录；← → 切换上一处、下一处。</dd></div>
-            <div><dt>换一个角度</dt><dd>1 全景 · 2 正面 · 3 侧面 · 4 俯瞰 · R 回到起点 · T 切换姿态。</dd></div>
+            <div><dt>换一个角度</dt><dd>1 全景 · 2 正面 · 3 侧面 · 4 俯瞰 · R 回到起点 · T 切换场景。</dd></div>
           </dl>
-          <small>艺术化三维形象 · 参照 2018 年吉祥物六视图，不是原工程文件</small>
+          <small>原型几何 · 展示配色、院徽与表情细节为场景补充</small>
           <button className="sz-help-enter" onClick={() => dialog.current?.close()}>继续观看<ArrowUpRight size={16} /></button>
         </div>
       </dialog>

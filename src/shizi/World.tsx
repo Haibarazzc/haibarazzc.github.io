@@ -1,6 +1,6 @@
-import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
+import { Suspense, useEffect, useMemo, useRef, type RefObject } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { Environment, Html, Lightformer, OrbitControls } from '@react-three/drei'
+import { Environment, Lightformer, OrbitControls } from '@react-three/drei'
 import { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import * as T from 'three'
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js'
@@ -24,7 +24,7 @@ export type WorldProps = {
 }
 
 const shots: Record<ViewMode, { pos: [number, number, number]; at: [number, number, number] }> = {
-  overview: { pos: [2.7, 1.75, 6.5], at: [0, 1.55, 0] },
+  overview: { pos: [3.4, 2.15, 8.4], at: [0, 1.45, 0] },
   front: { pos: [0, 1.65, 6.6], at: [0, 1.55, 0] },
   side: { pos: [6.6, 1.6, 0.12], at: [0, 1.55, 0] },
   top: { pos: [0.08, 7.4, 0.3], at: [0, 0.2, 0] },
@@ -378,16 +378,32 @@ function Stage({ pose, reduced }: { pose: PoseId; reduced: boolean }) {
   )
 }
 
-function Scene(props: WorldProps) {
-  useEffect(() => { props.onReady() }, [props.onReady])
+function FeaturePin({ selected, element }: { selected: number; element: RefObject<HTMLDivElement | null> }) {
+  const point = useMemo(() => {
+    const result = new T.Vector3(...features[selected].point)
+    result.y += 0.35
+    return result
+  }, [selected])
+  const projected = useMemo(() => new T.Vector3(), [])
+  const { camera, size } = useThree()
+  useFrame(() => {
+    if (!element.current) return
+    projected.copy(point).project(camera)
+    element.current.style.visibility = projected.z < -1 || projected.z > 1 ? 'hidden' : 'visible'
+    element.current.style.transform = `translate3d(${(projected.x + 1) * size.width / 2}px,${(1 - projected.y) * size.height / 2}px,0) translate(-50%,-50%)`
+  })
+  return null
+}
+
+function Scene(props: WorldProps & { pin: RefObject<HTMLDivElement | null> }) {
   return (
     <>
       <Atmosphere pose={props.pose} />
       <Stage pose={props.pose} reduced={props.reduced} />
-      <LionModel pose={props.pose} reduced={props.reduced} selected={props.selected} onSelect={props.onSelect} />
-      <Html position={[features[props.selected].point[0], features[props.selected].point[1] + 0.35, features[props.selected].point[2]]} center zIndexRange={[5, 0]} style={{ pointerEvents: 'none' }}>
-        <div className="sz-pin"><span>{String(props.selected + 1).padStart(2, '0')}</span>{features[props.selected].name}</div>
-      </Html>
+      <Suspense fallback={null}>
+        <LionModel onSelect={props.onSelect} onReady={props.onReady} />
+      </Suspense>
+      <FeaturePin selected={props.selected} element={props.pin} />
       <CameraRig shot={props.shot} auto={props.auto} reduced={props.reduced} onManual={props.onManual} onBearing={props.onBearing} />
       <Cinema pose={props.pose} />
     </>
@@ -395,9 +411,17 @@ function Scene(props: WorldProps) {
 }
 
 export default function World(props: WorldProps) {
+  const pin = useRef<HTMLDivElement>(null)
   return (
+    <>
     <Canvas shadows dpr={[1, 1.5]} camera={{ position: shots.overview.pos, fov: 36, near: 0.1, far: 40 }} gl={{ antialias: true, alpha: false, powerPreference: 'high-performance' }} onCreated={({ gl }) => { gl.toneMapping = T.ACESFilmicToneMapping; gl.toneMappingExposure = 1.06; gl.shadowMap.type = T.PCFShadowMap; gl.domElement.style.cursor = 'grab' }}>
-      <Scene {...props} />
+      <Scene {...props} pin={pin} />
     </Canvas>
+    <div style={{ pointerEvents: 'none', zIndex: 5 }} aria-hidden="true">
+      <div ref={pin} className="sz-pin" style={{ position: 'absolute', left: 0, top: 0 }}>
+        <span>{String(props.selected + 1).padStart(2, '0')}</span>{features[props.selected].name}
+      </div>
+    </div>
+    </>
   )
 }
