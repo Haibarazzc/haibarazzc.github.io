@@ -3,8 +3,55 @@ import type { PoseId } from './data'
 
 export const BODY_PIVOT = 0.32
 export const HEAD_PIVOT = 1.13
-export const CHEER_DURATION = 3.2
-export const CHEER_PEAK_TIME = 1.25
+export const CHEER_DURATION = 3.7
+export const CHEER_PEAK_TIME = 1.45
+
+// Both the sculpt and its separate tooth/tongue meshes use normalized model
+// coordinates, so one field keeps the original mouth contour joined together.
+export function smileDisplacement(x: number, y: number, z: number): [number, number, number] {
+  const side = Math.abs(x)
+  const front = T.MathUtils.smoothstep(z, 0.44, 0.62)
+    * T.MathUtils.smoothstep(side, 0.145, 0.23)
+    * (1 - T.MathUtils.smoothstep(side, 0.64, 0.72))
+    * T.MathUtils.smoothstep(y, 1.19, 1.27)
+    * (1 - T.MathUtils.smoothstep(y, 1.56, 1.64))
+  if (!front) return [0, 0, 0]
+  const corner = 1 - T.MathUtils.smoothstep(Math.hypot((side - 0.39) / 0.29, (y - 1.43) / 0.22), 0, 1)
+  const cheek = 1 - T.MathUtils.smoothstep(Math.hypot((side - 0.50) / 0.19, (y - 1.555) / 0.14), 0, 1)
+  return [Math.sign(x) * corner * front * 0.006, (corner * 0.020 + cheek * 0.006) * front, cheek * front * 0.0025]
+}
+
+export function getSmileAmount(cheerAge: number, reactionAge = 100) {
+  const cheer = cheerAge >= 0 && cheerAge < CHEER_DURATION
+    ? T.MathUtils.smootherstep(cheerAge, 0.10, 1.04) * (1 - T.MathUtils.smootherstep(cheerAge, 2.35, CHEER_DURATION)) : 0
+  const response = reactionAge >= 0 && reactionAge < 1.7
+    ? Math.sin(reactionAge * Math.PI / 1.7) ** 2 * 0.18 : 0
+  return Math.max(cheer, response)
+}
+
+export function addSmileMorph(geometry: T.BufferGeometry, origin: [number, number, number] = [0, 0, 0]) {
+  const position = geometry.getAttribute('position')
+  const offsets = new Float32Array(position.count * 3)
+  const target = geometry.clone()
+  const targetPosition = target.getAttribute('position')
+  for (let i = 0; i < position.count; i++) {
+    const x = position.getX(i), y = position.getY(i), z = position.getZ(i)
+    const displacement = smileDisplacement(x + origin[0], y + origin[1], z + origin[2])
+    offsets.set(displacement, i * 3)
+    targetPosition.setXYZ(i, x + displacement[0], y + displacement[1], z + displacement[2])
+  }
+  target.computeVertexNormals()
+  const normal = geometry.getAttribute('normal'), targetNormal = target.getAttribute('normal')
+  const normalOffsets = new Float32Array(position.count * 3)
+  for (let i = 0; i < normalOffsets.length; i++) normalOffsets[i] = targetNormal.array[i] - normal.array[i]
+  const smilePosition = new T.Float32BufferAttribute(offsets, 3)
+  smilePosition.name = 'Smile'
+  geometry.morphTargetsRelative = true
+  geometry.morphAttributes.position = [smilePosition]
+  geometry.morphAttributes.normal = [new T.Float32BufferAttribute(normalOffsets, 3)]
+  target.dispose()
+  return geometry
+}
 
 // Distal hands form separate branches below y=0.70. Following connectivity
 // includes each thumb without pulling in the adjacent belly surface.
@@ -58,6 +105,7 @@ function createArmWeights(geometry: T.BufferGeometry) {
 // Local arm chains articulate the original surface while the plinth stays fixed.
 export function createLionRig(source: T.BufferGeometry) {
   const geometry = source.clone()
+  addSmileMorph(geometry)
   const position = geometry.getAttribute('position')
   const armWeights = createArmWeights(geometry)
   const indices = new Uint16Array(position.count * 4)
@@ -135,20 +183,39 @@ function blinkPulse(age: number) {
   return age < 0.10 ? T.MathUtils.smoothstep(age, 0, 0.10) : 1 - T.MathUtils.smoothstep(age, 0.10, 0.30)
 }
 
+function cheerLift(age: number) {
+  return age >= 0 && age < CHEER_DURATION
+    ? T.MathUtils.smootherstep(age, 0.22, 1.02) * (1 - T.MathUtils.smootherstep(age, 2.30, 3.60)) : 0
+}
+
 export function animateLionRig(rig: LionRig, time: number, reactionAge: number, pose: PoseId, cheerAge = 100) {
-  const cheer = cheerAge >= 0 && cheerAge < CHEER_DURATION
-    ? T.MathUtils.smoothstep(cheerAge, 0, 0.85) * (1 - T.MathUtils.smoothstep(cheerAge, 2.10, CHEER_DURATION)) : 0
-  const wave = cheer * Math.sin(Math.max(0, cheerAge - 0.85) * 7.5)
+  rig.mesh.morphTargetInfluences![0] = getSmileAmount(cheerAge, reactionAge)
+  const cheer = (cheerLift(cheerAge) + cheerLift(cheerAge - 0.10)) * 0.5
   for (let i = 0; i < 2; i++) {
     const side = i === 0 ? -1 : 1
     const stagger = i === 0 ? 1 : 0.96
+    const age = cheerAge - i * 0.10
+    const lift = cheerLift(age)
+    // A separate envelope starts and stops the wrist wave at rest, rather
+    // than introducing a velocity jump as soon as the hands reach the top.
+    const wave = lift * T.MathUtils.smootherstep(age, 1.04, 1.30)
+      * (1 - T.MathUtils.smootherstep(age, 2.13, 2.40))
+      * Math.sin((age - 1.04) * 7.5)
     // Pitch first moves the short paws forward, clear of the large mane.
-    rig.shoulders[i].rotation.set(-0.85 * cheer, 0, side * (0.95 * cheer + wave * 0.055) * stagger, 'ZXY')
-    rig.shoulders[i].position.z = 0.14 + cheer * 0.055
-    rig.elbows[i].rotation.set(-0.20 * cheer, 0, side * (1.00 * cheer + wave * 0.065), 'ZXY')
+    rig.shoulders[i].rotation.set(-0.85 * lift, 0, side * (0.95 * lift + wave * 0.055) * stagger, 'ZXY')
+    rig.shoulders[i].position.z = 0.14 + lift * 0.055
+    rig.elbows[i].rotation.set(-0.20 * lift, 0, side * (1.00 * lift + wave * 0.065), 'ZXY')
   }
+  const active = cheerAge >= 0 && cheerAge < CHEER_DURATION
+  const preparation = active ? T.MathUtils.smootherstep(cheerAge, 0, 0.20)
+    * (1 - T.MathUtils.smootherstep(cheerAge, 0.20, 0.52)) : 0
+  const settling = active ? T.MathUtils.smootherstep(cheerAge, 2.82, 3.15)
+    * (1 - T.MathUtils.smootherstep(cheerAge, 3.15, CHEER_DURATION)) : 0
+  const squash = preparation * 0.004 + settling * 0.0012
   const breath = Math.sin(time * 1.65) * 0.008
-  rig.body.scale.set(1 + breath * 0.7, 1 + breath * 0.4, 1 + breath)
+  // Only the existing mobile body weights compress; feet and plinth stay on
+  // the unchanged ground bone throughout the anticipation and recovery.
+  rig.body.scale.set(1 + breath * 0.7 + squash * 0.35, 1 + breath * 0.4 - squash, 1 + breath + squash * 0.35)
   rig.body.rotation.z = Math.sin(time * 0.67) * 0.005
   const cycle = time % 11.8
   const nodAge = cycle - 5.1

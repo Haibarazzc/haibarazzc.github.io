@@ -14,6 +14,7 @@ export function createBlinkGeometry() {
   const geometry = new T.BufferGeometry()
   const segments = 32, rows = 8
   geometry.setAttribute('position', new T.Float32BufferAttribute(new Float32Array((segments + 1) * (rows + 1) * 3), 3))
+  geometry.setAttribute('color', new T.Float32BufferAttribute(new Float32Array((segments + 1) * (rows + 1) * 4), 4))
   const indices: number[] = []
   for (let i = 0; i < segments; i++) {
     for (let j = 0; j < rows; j++) {
@@ -28,6 +29,7 @@ export function createBlinkGeometry() {
 
 export function updateBlinkGeometry(geometry: T.BufferGeometry, closure: number) {
   const position = geometry.getAttribute('position')
+  const color = geometry.getAttribute('color')
   for (let i = 0; i <= 32; i++) {
     const angle = i / 32 * Math.PI
     const x = Math.cos(angle) * 0.135, height = Math.sin(angle) * 0.161
@@ -35,9 +37,12 @@ export function updateBlinkGeometry(geometry: T.BufferGeometry, closure: number)
       const y = height * (1 - 2 * closure * j / 8)
       const z = Math.sqrt(Math.max(0, 1 - (x / 0.135) ** 2 - (y / 0.161) ** 2)) * 0.079 + 0.005
       position.setXYZ(i * 9 + j, x, y, z)
+      const radius = Math.hypot(x / 0.135, y / 0.161)
+      color.setXYZW(i * 9 + j, 1, 1, 1, 1 - T.MathUtils.smoothstep(radius, 0.82, 1))
     }
   }
   position.needsUpdate = true
+  color.needsUpdate = true
   geometry.computeVertexNormals()
 }
 

@@ -126,12 +126,12 @@ export default function Shizi() {
           </div>
           <div className="sz-pagination">
             <button className="sz-icon" aria-label="上一处" onClick={() => select((selected + 5) % 6)}><ChevronLeft size={18} /></button>
-            <span>{String(selected + 1).padStart(2, '0')} <i>—</i> 06</span>
+            <span>{String(selected + 1).padStart(2, '0')} <i>/</i> 06</span>
             <button className="sz-icon" aria-label="下一处" onClick={() => select((selected + 1) % 6)}><ChevronRight size={18} /></button>
           </div>
         </section>
         <div className="sz-building-index" role="group" aria-label="六处设计">
-          {features.map((item, i) => <button key={item.name} aria-label={item.name} aria-pressed={selected === i} title={item.name} onClick={() => select(i)}><span>{String(i + 1).padStart(2, '0')}</span><i /></button>)}
+          {features.map((item, i) => <button key={item.name} aria-label={item.name} aria-pressed={selected === i} title={item.name} onClick={() => select(i)}><span className="sz-part-number">{String(i + 1).padStart(2, '0')}</span><span className="sz-part-name" aria-hidden="true">{item.name}</span><i /></button>)}
         </div>
       </aside>
       <div className="sz-world-caption" aria-hidden="true"><span>{poses[pose].sub}</span><i /><small>原型入景 · 六面可观</small></div>
@@ -140,13 +140,14 @@ export default function Shizi() {
         <div className="sz-view-controls">
           {viewItems.map(({ id, label, Icon }) => <button key={id} aria-pressed={shot.mode === id && shot.focus === null} onClick={() => view(id)}><Icon size={20} /><span>{label}</span></button>)}
           <span className="sz-dock-divider" />
-          <button onClick={toggleOrbit} aria-pressed={auto} disabled={reduced} title={reduced ? '已遵循减少动态效果设置' : '自动环绕'}>{auto ? <Pause size={19} /> : <RotateCw size={21} />}<span>自动环绕</span></button>
+          <button onClick={toggleOrbit} aria-label="自动环绕" aria-pressed={auto} disabled={reduced} title={reduced ? '已遵循减少动态效果设置' : '自动环绕'}>{auto ? <Pause size={19} /> : <RotateCw size={21} />}<span className="sz-orbit-label">自动环绕</span><span className="sz-orbit-short" aria-hidden="true">环绕</span></button>
         </div>
         <button className="sz-reset" onClick={reset} aria-label="重置视角" title="重置视角 · R"><RotateCcw size={22} /></button>
       </nav>
       <div className="sz-footer">
         <span className="sz-instructions"><Mouse size={18} />拖拽旋转<span>·</span>滚轮缩放<span>·</span>点击狮子探索</span>
         <span className="sz-signature">鬃展成轮 · 笑意成光</span>
+        <span className="sz-touch-hint"><MoveHorizontal size={14} />拖拽转动</span>
         <div className="sz-utility">
           <button className="sz-icon sz-mobile-help" aria-label="操作指南" onClick={e => { helpButton.current = e.currentTarget; dialog.current?.showModal() }}><HelpCircle size={18} /></button>
           <button className="sz-icon" onClick={() => setAnimated(value => !value)} aria-label={animated && !reduced ? '暂停动作' : '播放动作'} aria-pressed={animated && !reduced} disabled={reduced} title={reduced ? '已遵循减少动态效果设置' : animated ? '暂停动作' : '播放动作'}>{animated && !reduced ? <Pause size={18} /> : <Play size={18} />}</button>
@@ -163,8 +164,8 @@ export default function Shizi() {
           <p>这只狮子保留原型的日轮鬃、圆脸笑意与短肢细尾，补上暖橙配色和胸口院徽。静立欣赏完整造型，欢呼时双手举起，回望从侧面观察轮廓。</p>
           <dl>
             <div><dt>转动与靠近</dt><dd>鼠标拖拽 / 单指滑动旋转，滚轮 / 双指捏合缩放。</dd></div>
-            <div><dt>和狮子打招呼</dt><dd>轻点狮子，它会点头回应。平时会轻轻呼吸、眨眼和摇尾巴；右下角可暂停动作。</dd></div>
-            <div><dt>一起欢呼</dt><dd>点击上方“欢呼”，双手会举起、轻轻摇摆，再自然落下。再点一次即可重播。</dd></div>
+            <div><dt>和狮子打招呼</dt><dd>在场景中移动鼠标或轻触屏幕，它会轻轻看过去；点击狮子还会点头回应。右下角可暂停动作。</dd></div>
+            <div><dt>一起欢呼</dt><dd>点击上方“欢呼”，双手举起时会眯眼笑，嘴角轻轻上扬，再自然恢复。再点一次即可重播。</dd></div>
             <div><dt>看一处设计</dt><dd>点击狮子或六处目录；← → 切换上一处、下一处。</dd></div>
             <div><dt>换一个角度</dt><dd>1 全景 · 2 正面 · 3 侧面 · 4 俯瞰 · R 回到起点 · T 切换场景。</dd></div>
           </dl>
