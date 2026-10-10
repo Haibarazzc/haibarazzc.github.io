@@ -17,6 +17,8 @@ export type WorldProps = {
   selected: number
   auto: boolean
   reduced: boolean
+  animated: boolean
+  cheerRevision: number
   onSelect: (id: number) => void
   onManual: () => void
   onBearing: (degrees: number) => void
@@ -52,7 +54,7 @@ function Cinema({ pose }: { pose: PoseId }) {
   return null
 }
 
-function CameraRig({ shot, auto, reduced, onManual, onBearing }: Pick<WorldProps, 'shot' | 'auto' | 'reduced' | 'onManual' | 'onBearing'>) {
+function CameraRig({ shot, pose, auto, reduced, onManual, onBearing }: Pick<WorldProps, 'shot' | 'pose' | 'auto' | 'reduced' | 'onManual' | 'onBearing'>) {
   const controls = useRef<OrbitControlsImpl>(null)
   const { camera, size } = useThree()
   const destination = useRef(new T.Vector3(...shots.overview.pos))
@@ -62,7 +64,9 @@ function CameraRig({ shot, auto, reduced, onManual, onBearing }: Pick<WorldProps
   useEffect(() => {
     const framed = shot.focus !== null
       ? { pos: features[shot.focus].camera, at: features[shot.focus].point }
-      : shots[shot.mode]
+      : pose === 'cheer' && shot.mode === 'overview'
+        ? { pos: [2.2, 1.95, 6.4] as [number, number, number], at: [0, 1.5, 0] as [number, number, number] }
+        : shots[shot.mode]
     const pos = new T.Vector3(...framed.pos)
     const at = new T.Vector3(...framed.at)
     if (size.width < 900) pos.sub(at).multiplyScalar(1.28).add(at)
@@ -73,7 +77,7 @@ function CameraRig({ shot, auto, reduced, onManual, onBearing }: Pick<WorldProps
       controls.current?.target.copy(at)
       controls.current?.update()
     } else moving.current = true
-  }, [shot, camera, reduced, size.width, size.height])
+  }, [shot, pose, camera, reduced, size.width, size.height])
   useFrame((_, dt) => {
     if (!controls.current) return
     controls.current.autoRotate = auto && !moving.current && !reduced && shot.focus === null
@@ -401,10 +405,10 @@ function Scene(props: WorldProps & { pin: RefObject<HTMLDivElement | null> }) {
       <Atmosphere pose={props.pose} />
       <Stage pose={props.pose} reduced={props.reduced} />
       <Suspense fallback={null}>
-        <LionModel onSelect={props.onSelect} onReady={props.onReady} />
+        <LionModel pose={props.pose} reduced={props.reduced} animated={props.animated} cheerRevision={props.cheerRevision} onSelect={props.onSelect} onReady={props.onReady} />
       </Suspense>
       <FeaturePin selected={props.selected} element={props.pin} />
-      <CameraRig shot={props.shot} auto={props.auto} reduced={props.reduced} onManual={props.onManual} onBearing={props.onBearing} />
+      <CameraRig shot={props.shot} pose={props.pose} auto={props.auto} reduced={props.reduced} onManual={props.onManual} onBearing={props.onBearing} />
       <Cinema pose={props.pose} />
     </>
   )

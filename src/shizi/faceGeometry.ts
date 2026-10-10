@@ -1,5 +1,46 @@
 import * as T from 'three'
 
+export function createClosedEyeGeometry() {
+  const points = Array.from({ length: 25 }, (_, i) => {
+    const u = i / 24, x = (u * 2 - 1) * 0.102
+    const y = -0.014 + Math.sin(u * Math.PI) * 0.026
+    const z = Math.sqrt(1 - (x / 0.135) ** 2 - (y / 0.161) ** 2) * 0.079 + 0.009
+    return new T.Vector3(x, y, z)
+  })
+  return new T.TubeGeometry(new T.CatmullRomCurve3(points), 32, 0.0035, 6, false)
+}
+
+export function createBlinkGeometry() {
+  const geometry = new T.BufferGeometry()
+  const segments = 32, rows = 8
+  geometry.setAttribute('position', new T.Float32BufferAttribute(new Float32Array((segments + 1) * (rows + 1) * 3), 3))
+  const indices: number[] = []
+  for (let i = 0; i < segments; i++) {
+    for (let j = 0; j < rows; j++) {
+      const a = i * (rows + 1) + j, b = (i + 1) * (rows + 1) + j
+      indices.push(a, b, a + 1, b, b + 1, a + 1)
+    }
+  }
+  geometry.setIndex(indices)
+  updateBlinkGeometry(geometry, 1)
+  return geometry
+}
+
+export function updateBlinkGeometry(geometry: T.BufferGeometry, closure: number) {
+  const position = geometry.getAttribute('position')
+  for (let i = 0; i <= 32; i++) {
+    const angle = i / 32 * Math.PI
+    const x = Math.cos(angle) * 0.135, height = Math.sin(angle) * 0.161
+    for (let j = 0; j <= 8; j++) {
+      const y = height * (1 - 2 * closure * j / 8)
+      const z = Math.sqrt(Math.max(0, 1 - (x / 0.135) ** 2 - (y / 0.161) ** 2)) * 0.079 + 0.005
+      position.setXYZ(i * 9 + j, x, y, z)
+    }
+  }
+  position.needsUpdate = true
+  geometry.computeVertexNormals()
+}
+
 export function createEyeGeometry() {
   const geometry = new T.SphereGeometry(1, 48, 32)
   const positions = geometry.getAttribute('position')

@@ -1,5 +1,5 @@
 import { Component, Suspense, lazy, useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
-import { ArrowLeft, ArrowUpRight, Box, ChevronLeft, ChevronRight, Compass, Eye, HelpCircle, Layers, Maximize2, Minimize2, Mouse, MoveHorizontal, Pause, RotateCcw, RotateCw, Scan, Smile, Sparkles, Volume2, VolumeX, X } from 'lucide-react'
+import { ArrowLeft, ArrowUpRight, Box, ChevronLeft, ChevronRight, Compass, Eye, HelpCircle, Layers, Maximize2, Minimize2, Mouse, MoveHorizontal, Pause, Play, RotateCcw, RotateCw, Scan, Smile, Sparkles, Volume2, VolumeX, X } from 'lucide-react'
 import { features, poses, type CameraShot, type PoseId, type ViewMode } from './data'
 import './Shizi.css'
 
@@ -23,6 +23,8 @@ export default function Shizi() {
   const [bearing, setBearing] = useState(0)
   const [fullscreen, setFullscreen] = useState(false)
   const [sound, setSound] = useState(false)
+  const [animated, setAnimated] = useState(true)
+  const [cheerRevision, setCheerRevision] = useState(0)
   const [notice, setNotice] = useState('')
   const [reduced, setReduced] = useState(() => matchMedia('(prefers-reduced-motion: reduce)').matches)
   const dialog = useRef<HTMLDialogElement>(null)
@@ -31,7 +33,11 @@ export default function Shizi() {
   const feature = features[selected]
   const select = useCallback((id: number) => { setSelected(id); setAuto(false); setShot(s => ({ mode: s.mode, focus: id, revision: s.revision + 1 })) }, [])
   const view = useCallback((mode: ViewMode) => { setAuto(false); setShot(s => ({ mode, focus: null, revision: s.revision + 1 })) }, [])
-  const choosePose = useCallback((next: PoseId) => { setPose(next); view(next === 'glance' ? 'side' : 'overview') }, [view])
+  const choosePose = useCallback((next: PoseId) => {
+    setPose(next)
+    if (next === 'cheer') { setCheerRevision(value => value + 1); setAnimated(true) }
+    view(next === 'glance' ? 'side' : 'overview')
+  }, [view])
   const reset = useCallback(() => { setSelected(0); setPose('stand'); view('overview') }, [view])
   const onReady = useCallback(() => setReady(true), [])
   const manual = useCallback(() => setAuto(false), [])
@@ -94,7 +100,7 @@ export default function Shizi() {
       <div className="sz-world" aria-label="可拖拽旋转、滚轮缩放的致新书院狮子吉祥物">
         <SceneBoundary onError={onReady}>
           <Suspense fallback={null}>
-            <World pose={pose} shot={shot} selected={selected} auto={auto} reduced={reduced} onSelect={select} onManual={manual} onBearing={setBearing} onReady={onReady} />
+            <World pose={pose} shot={shot} selected={selected} auto={auto} reduced={reduced} animated={animated} cheerRevision={cheerRevision} onSelect={select} onManual={manual} onBearing={setBearing} onReady={onReady} />
           </Suspense>
         </SceneBoundary>
       </div>
@@ -104,7 +110,7 @@ export default function Shizi() {
         <a className="sz-brand" href="https://mp.weixin.qq.com/s/xlnyHPGfobb3b-zd5unvpA" aria-label="狮小新，阅读微信公众号文章"><span className="sz-seal">狮</span><span><strong>狮小新</strong><small>ZHIXIN · MASCOT</small></span></a>
         <div className="sz-header-right">
           <div className="sz-time-switch" role="group" aria-label="展示场景">
-            {poseItems.map(({ id, Icon }) => <button key={id} aria-pressed={pose === id} onClick={() => choosePose(id)}><Icon size={15} /><span>{poses[id].label}</span></button>)}
+            {poseItems.map(({ id, Icon }) => <button key={id} aria-pressed={pose === id} title={id === 'cheer' ? '举手欢呼 · 点击可重播' : undefined} onClick={() => choosePose(id)}><Icon size={15} /><span>{poses[id].label}</span></button>)}
           </div>
           <button ref={helpButton} className="sz-icon" aria-label="操作指南" onClick={e => { helpButton.current = e.currentTarget; dialog.current?.showModal() }}><HelpCircle size={18} /></button>
         </div>
@@ -143,6 +149,7 @@ export default function Shizi() {
         <span className="sz-signature">鬃展成轮 · 笑意成光</span>
         <div className="sz-utility">
           <button className="sz-icon sz-mobile-help" aria-label="操作指南" onClick={e => { helpButton.current = e.currentTarget; dialog.current?.showModal() }}><HelpCircle size={18} /></button>
+          <button className="sz-icon" onClick={() => setAnimated(value => !value)} aria-label={animated && !reduced ? '暂停动作' : '播放动作'} aria-pressed={animated && !reduced} disabled={reduced} title={reduced ? '已遵循减少动态效果设置' : animated ? '暂停动作' : '播放动作'}>{animated && !reduced ? <Pause size={18} /> : <Play size={18} />}</button>
           <button className="sz-icon" onClick={toggleSound} aria-label={sound ? '关闭环境音' : '开启环境音'} aria-pressed={sound}>{sound ? <Volume2 size={18} /> : <VolumeX size={18} />}</button>
           <button className="sz-icon" onClick={toggleFullscreen} aria-label={fullscreen ? '退出全屏' : '进入全屏'}>{fullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}</button>
         </div>
@@ -153,9 +160,11 @@ export default function Shizi() {
           <button className="sz-icon sz-help-close" aria-label="关闭操作指南" onClick={() => dialog.current?.close()}><X size={20} /></button>
           <Compass size={32} />
           <h2>六面看狮，光影可换。</h2>
-          <p>这只狮子保留原型的日轮鬃、圆脸笑意与短肢细尾，补上暖橙配色和胸口院徽。静立欣赏完整造型，暖阳切换温暖光照，回望从侧面观察轮廓。</p>
+          <p>这只狮子保留原型的日轮鬃、圆脸笑意与短肢细尾，补上暖橙配色和胸口院徽。静立欣赏完整造型，欢呼时双手举起，回望从侧面观察轮廓。</p>
           <dl>
             <div><dt>转动与靠近</dt><dd>鼠标拖拽 / 单指滑动旋转，滚轮 / 双指捏合缩放。</dd></div>
+            <div><dt>和狮子打招呼</dt><dd>轻点狮子，它会点头回应。平时会轻轻呼吸、眨眼和摇尾巴；右下角可暂停动作。</dd></div>
+            <div><dt>一起欢呼</dt><dd>点击上方“欢呼”，双手会举起、轻轻摇摆，再自然落下。再点一次即可重播。</dd></div>
             <div><dt>看一处设计</dt><dd>点击狮子或六处目录；← → 切换上一处、下一处。</dd></div>
             <div><dt>换一个角度</dt><dd>1 全景 · 2 正面 · 3 侧面 · 4 俯瞰 · R 回到起点 · T 切换场景。</dd></div>
           </dl>
