@@ -1,6 +1,9 @@
 import { Component, Suspense, lazy, useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
-import { ArrowLeft, ArrowUpRight, Box, ChevronLeft, ChevronRight, Compass, Eye, HelpCircle, Layers, Maximize2, Minimize2, Mouse, MoveHorizontal, Pause, Play, RotateCcw, RotateCw, Scan, Smile, Sparkles, Volume2, VolumeX, X } from 'lucide-react'
+import { ArrowUpRight, BookOpen, Box, Camera, ChevronLeft, ChevronRight, Compass, Eye, Hand, HelpCircle, Layers, Maximize2, Minimize2, Mouse, MoveHorizontal, Pause, Play, RotateCcw, RotateCw, Scan, Smile, Sparkles, Volume2, VolumeX, X } from 'lucide-react'
 import { features, poses, type CameraShot, type PoseId, type ViewMode } from './data'
+import DesignStory, { type DesignTarget } from './DesignStory'
+import PostcardStudio from './PostcardStudio'
+import type { CaptureScene } from './World'
 import './Shizi.css'
 
 const World = lazy(() => import('./World'))
@@ -25,10 +28,17 @@ export default function Shizi() {
   const [sound, setSound] = useState(false)
   const [animated, setAnimated] = useState(true)
   const [cheerRevision, setCheerRevision] = useState(0)
+  const [petRevision, setPetRevision] = useState(0)
+  const [photoMode, setPhotoMode] = useState(false)
+  const [captureReady, setCaptureReady] = useState(false)
   const [notice, setNotice] = useState('')
   const [reduced, setReduced] = useState(() => matchMedia('(prefers-reduced-motion: reduce)').matches)
   const dialog = useRef<HTMLDialogElement>(null)
   const helpButton = useRef<HTMLButtonElement>(null)
+  const designDialog = useRef<HTMLDialogElement>(null)
+  const designButton = useRef<HTMLButtonElement>(null)
+  const photoButton = useRef<HTMLButtonElement>(null)
+  const capture = useRef<CaptureScene | null>(null)
   const audio = useRef<AudioContext | null>(null)
   const feature = features[selected]
   const select = useCallback((id: number) => { setSelected(id); setAuto(false); setShot(s => ({ mode: s.mode, focus: id, revision: s.revision + 1 })) }, [])
@@ -38,10 +48,44 @@ export default function Shizi() {
     if (next === 'cheer') { setCheerRevision(value => value + 1); setAnimated(true) }
     view(next === 'glance' ? 'side' : 'overview')
   }, [view])
+  const choosePhotoPose = useCallback((next: PoseId) => {
+    setPose(next)
+    view(next === 'glance' ? 'side' : 'overview')
+  }, [view])
   const reset = useCallback(() => { setSelected(0); setPose('stand'); view('overview') }, [view])
   const onReady = useCallback(() => setReady(true), [])
   const manual = useCallback(() => setAuto(false), [])
+  const handleCaptureReady = useCallback((next: CaptureScene | null) => { capture.current = next; setCaptureReady(Boolean(next)) }, [])
+  const captureScene = useCallback(async () => {
+    if (!capture.current) throw new Error('狮小新还在准备，请稍等片刻再拍。')
+    return capture.current()
+  }, [])
+  const petHead = useCallback(() => {
+    setPetRevision(value => value + 1)
+    setAnimated(true)
+    setAuto(false)
+    setNotice('舒服～再摸摸头。')
+  }, [])
+  const closePhoto = useCallback(() => {
+    setPhotoMode(false)
+    requestAnimationFrame(() => photoButton.current?.focus())
+  }, [])
+  function openPhoto() {
+    view('overview')
+    setPhotoMode(true)
+    setNotice('')
+  }
   const toggleOrbit = () => { if (!auto) setShot(s => ({ mode: 'overview', focus: null, revision: s.revision + 1 })); setAuto(!auto) }
+  function openDesign() {
+    setAuto(false)
+    designDialog.current?.showModal()
+    designDialog.current?.querySelector('.sz-design-scroll')?.scrollTo(0, 0)
+  }
+  function exploreDesign(target: DesignTarget) {
+    designDialog.current?.close()
+    if (target === 'tuft') { setPose('stand'); select(1) }
+    else choosePose(target === 'cheer' ? 'cheer' : 'stand')
+  }
   useEffect(() => {
     const previousTitle = document.title
     document.title = '狮小新 · 致新书院吉祥物'
@@ -56,7 +100,8 @@ export default function Shizi() {
   }, [])
   useEffect(() => {
     const key = (event: KeyboardEvent) => {
-      if (dialog.current?.open) return
+      if (dialog.current?.open || designDialog.current?.open) return
+      if (photoMode) { if (event.key === 'Escape') { event.preventDefault(); closePhoto() } return }
       if (event.target instanceof HTMLElement && event.target.closest('button,a,input,select,textarea')) return
       if (event.key === 'ArrowRight') { event.preventDefault(); select((selected + 1) % 6) }
       if (event.key === 'ArrowLeft') { event.preventDefault(); select((selected + 5) % 6) }
@@ -69,7 +114,7 @@ export default function Shizi() {
     }
     window.addEventListener('keydown', key)
     return () => window.removeEventListener('keydown', key)
-  }, [selected, select, view, reset, pose, choosePose])
+  }, [selected, select, view, reset, pose, choosePose, photoMode, closePhoto])
   useEffect(() => { if (!notice) return; const id = setTimeout(() => setNotice(''), 4500); return () => clearTimeout(id) }, [notice])
   async function toggleFullscreen() { try { if (document.fullscreenElement) await document.exitFullscreen(); else await document.documentElement.requestFullscreen() } catch { setNotice('当前浏览器不支持全屏，可直接在页面中观看。') } }
   async function toggleSound() {
@@ -96,11 +141,11 @@ export default function Shizi() {
     } catch { await audio.current?.close(); audio.current = null; setNotice('环境音暂时无法播放，请稍后重试。') }
   }
   return (
-    <div className={`sz-scene sz-${pose}`} data-ready={ready}>
+    <div className={`sz-scene sz-${pose}${photoMode ? ' sz-photo-mode' : ''}`} data-ready={ready}>
       <div className="sz-world" aria-label="可拖拽旋转、滚轮缩放的致新书院狮子吉祥物">
         <SceneBoundary onError={onReady}>
           <Suspense fallback={null}>
-            <World pose={pose} shot={shot} selected={selected} auto={auto} reduced={reduced} animated={animated} cheerRevision={cheerRevision} onSelect={select} onManual={manual} onBearing={setBearing} onReady={onReady} />
+            <World pose={pose} shot={shot} selected={selected} auto={auto} reduced={reduced} animated={animated} cheerRevision={cheerRevision} petRevision={petRevision} photoMode={photoMode} onPet={petHead} onCaptureReady={handleCaptureReady} onSelect={select} onManual={manual} onBearing={setBearing} onReady={onReady} />
           </Suspense>
         </SceneBoundary>
       </div>
@@ -115,8 +160,12 @@ export default function Shizi() {
           <button ref={helpButton} className="sz-icon" aria-label="操作指南" onClick={e => { helpButton.current = e.currentTarget; dialog.current?.showModal() }}><HelpCircle size={18} /></button>
         </div>
       </header>
+      <div className="sz-play-tools" role="group" aria-label="和狮小新一起玩">
+        <button onClick={petHead} disabled={!ready}><Hand size={17} /><span>摸摸头</span></button>
+        <button ref={photoButton} onClick={openPhoto}><Camera size={17} /><span>拍明信片</span></button>
+      </div>
       <aside className="sz-story">
-        <div className="sz-intro"><span className="sz-edition"><i /> 南科大 · 致新书院</span><h1>一头小狮，<br />一院朝气。</h1><p>把狮小新原型，放进一庭春光。</p><div className="sz-intro-line" /></div>
+        <div className="sz-intro"><span className="sz-edition"><i /> 南科大 · 致新书院</span><h1>一头小狮，<br />一院朝气。</h1><p>以狮为形，以橙色写朝气。</p><div className="sz-intro-line" /></div>
         <section className="sz-chapter" aria-label="当前部位" aria-live="polite">
           <div key={selected} className="sz-chapter-content">
             <div className="sz-chapter-title"><span>{String(selected + 1).padStart(2, '0')} <i>/</i></span><h2>{feature.name}</h2></div>
@@ -145,9 +194,9 @@ export default function Shizi() {
         <button className="sz-reset" onClick={reset} aria-label="重置视角" title="重置视角 · R"><RotateCcw size={22} /></button>
       </nav>
       <div className="sz-footer">
+        <button ref={designButton} className="sz-design-entry" aria-haspopup="dialog" aria-controls="sz-design-dialog" onClick={openDesign}><BookOpen size={17} /><span>设计理念</span><ArrowUpRight size={14} /></button>
         <span className="sz-instructions"><Mouse size={18} />拖拽旋转<span>·</span>滚轮缩放<span>·</span>点击狮子探索</span>
         <span className="sz-signature">鬃展成轮 · 笑意成光</span>
-        <span className="sz-touch-hint"><MoveHorizontal size={14} />拖拽转动</span>
         <div className="sz-utility">
           <button className="sz-icon sz-mobile-help" aria-label="操作指南" onClick={e => { helpButton.current = e.currentTarget; dialog.current?.showModal() }}><HelpCircle size={18} /></button>
           <button className="sz-icon" onClick={() => setAnimated(value => !value)} aria-label={animated && !reduced ? '暂停动作' : '播放动作'} aria-pressed={animated && !reduced} disabled={reduced} title={reduced ? '已遵循减少动态效果设置' : animated ? '暂停动作' : '播放动作'}>{animated && !reduced ? <Pause size={18} /> : <Play size={18} />}</button>
@@ -155,6 +204,8 @@ export default function Shizi() {
           <button className="sz-icon" onClick={toggleFullscreen} aria-label={fullscreen ? '退出全屏' : '进入全屏'}>{fullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}</button>
         </div>
       </div>
+      {photoMode && <PostcardStudio pose={pose} viewMode={shot.mode} reduced={reduced} ready={ready && captureReady} onPose={choosePhotoPose} onView={view} onCapture={captureScene} onClose={closePhoto} />}
+      <DesignStory dialogRef={designDialog} onExplore={exploreDesign} onClose={() => designButton.current?.focus()} />
       {notice && <p className="sz-notice" role="status">{notice}</p>}
       <dialog ref={dialog} className="sz-help" onClick={e => { if (e.target === e.currentTarget) dialog.current?.close() }} onClose={() => helpButton.current?.focus()}>
         <div>
@@ -164,9 +215,10 @@ export default function Shizi() {
           <p>这只狮子保留原型的日轮鬃、圆脸笑意与短肢细尾，补上暖橙配色和胸口院徽。静立欣赏完整造型，欢呼时双手举起，回望从侧面观察轮廓。</p>
           <dl>
             <div><dt>转动与靠近</dt><dd>鼠标拖拽 / 单指滑动旋转，滚轮 / 双指捏合缩放。</dd></div>
-            <div><dt>和狮子打招呼</dt><dd>在场景中移动鼠标或轻触屏幕，它会轻轻看过去；点击狮子还会点头回应。右下角可暂停动作。</dd></div>
+            <div><dt>和狮子打招呼</dt><dd>在场景中移动鼠标或轻触屏幕，它会轻轻看过去；点击额头或“摸摸头”，它会眯眼、歪头回应。右下角可暂停动作。</dd></div>
             <div><dt>一起欢呼</dt><dd>点击上方“欢呼”，双手举起时会眯眼笑，嘴角轻轻上扬，再自然恢复。再点一次即可重播。</dd></div>
-            <div><dt>看一处设计</dt><dd>点击狮子或六处目录；← → 切换上一处、下一处。</dd></div>
+            <div><dt>带走一张明信片</dt><dd>点击“拍明信片”，选姿势、角度与祝福语，也可以拖拽调整构图；拍下后保存图片。Esc 退出拍照。</dd></div>
+            <div><dt>看一处设计</dt><dd>点击狮子的其他部位或六处目录；← → 切换上一处、下一处。</dd></div>
             <div><dt>换一个角度</dt><dd>1 全景 · 2 正面 · 3 侧面 · 4 俯瞰 · R 回到起点 · T 切换场景。</dd></div>
           </dl>
           <small>原型几何 · 展示配色、院徽与表情细节为场景补充</small>

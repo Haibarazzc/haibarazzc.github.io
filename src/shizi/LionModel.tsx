@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useRef, type RefObject } from 'react'
+import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { useGLTF } from '@react-three/drei'
 import { createPortal, useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
 import * as T from 'three'
 import { DecalGeometry } from 'three/addons/geometries/DecalGeometry.js'
 import useEmblemTexture from './useEmblemTexture'
 import { createBlinkGeometry, createClosedEyeGeometry, updateBlinkGeometry, createEyeGeometry, createEyelidGeometry, createTeethGeometry, createTongueGeometry } from './faceGeometry'
-import { addSmileMorph, animateLionRig, BODY_PIVOT, CHEER_DURATION, CHEER_PEAK_TIME, createLionRig, getSmileAmount, HEAD_PIVOT } from './lionMotion'
+import { addSmileMorph, animateLionRig, BODY_PIVOT, CHEER_DURATION, CHEER_PEAK_TIME, createLionRig, getPetAmount, getSmileAmount, HEAD_PIVOT, PET_DURATION, PET_PEAK_TIME } from './lionMotion'
 import { bindLionGaze, createLionGaze, updateLionGaze, type LionGaze } from './lionGaze'
 import type { PoseId } from './data'
 
@@ -19,6 +19,11 @@ export function lionPart({ x, y, z }: { x: number; y: number; z: number }) {
   if (x > 0.64 && z < -0.25 && y > 0.22) return 5
   if (y > 0.46 && Math.abs(x) < 0.38 && z > 0.14) return 3
   return 4
+}
+
+export function isPetPoint({ x, y, z }: { x: number; y: number; z: number }) {
+  return (y > 2.04 && Math.abs(x) < 0.34 && z > 0.40)
+    || (y > 2.55 && Math.abs(x) < 0.72 && z > -0.10)
 }
 
 function Eye({ x, blink, smile, gaze }: { x: number; blink: RefObject<number>; smile: RefObject<number>; gaze: LionGaze }) {
@@ -109,11 +114,14 @@ function FaceDetails({ blink, smile, gaze }: { blink: RefObject<number>; smile: 
   )
 }
 
-export default function LionModel({ pose, reduced, animated, cheerRevision, onSelect, onReady }: {
+export default function LionModel({ pose, reduced, animated, cheerRevision, petRevision, photoPose, onPet, onSelect, onReady }: {
   pose: PoseId
   reduced: boolean
   animated: boolean
   cheerRevision: number
+  petRevision: number
+  photoPose: PoseId | null
+  onPet: () => void
   onSelect: (id: number) => void
   onReady: () => void
 }) {
@@ -126,6 +134,11 @@ export default function LionModel({ pose, reduced, animated, cheerRevision, onSe
   const reactionAt = useRef(-100)
   const cheerAt = useRef(-100)
   const cheerQueued = useRef(false)
+  const petAt = useRef(-100)
+  const petQueued = useRef(false)
+  const seenCheerRevision = useRef(0)
+  const seenPetRevision = useRef(0)
+  const [reducedPetActive, setReducedPetActive] = useState(false)
   const blink = useRef(0)
   const smile = useRef(0)
   const gaze = useMemo(createLionGaze, [])
@@ -137,47 +150,92 @@ export default function LionModel({ pose, reduced, animated, cheerRevision, onSe
   useEffect(() => { onReady() }, [onReady])
   useEffect(() => () => { document.body.style.cursor = '' }, [])
   useEffect(() => {
-    if (!reduced && animated) return bindLionGaze(gl.domElement, gaze)
+    if (!reduced && animated && photoPose === null) return bindLionGaze(gl.domElement, gaze)
     gaze.active = false
-    if (reduced) { gaze.eyes.set(0, 0); gaze.head.set(0, 0) }
-  }, [gl, gaze, reduced, animated])
+    if (reduced || photoPose !== null) { gaze.eyes.set(0, 0); gaze.head.set(0, 0) }
+  }, [gl, gaze, reduced, animated, photoPose])
   useEffect(() => {
-    if (!cheerRevision) return
+    if (cheerRevision === seenCheerRevision.current) return
+    seenCheerRevision.current = cheerRevision
+    if (!cheerRevision || photoPose !== null) return
     if (elapsed.current - cheerAt.current < CHEER_DURATION) cheerQueued.current = true
     else cheerAt.current = elapsed.current
-  }, [cheerRevision])
+  }, [cheerRevision, photoPose])
   useEffect(() => {
+    if (petRevision === seenPetRevision.current) return
+    seenPetRevision.current = petRevision
+    if (!petRevision || photoPose !== null) return
     if (reduced) {
-      cheerAt.current = -100
-      cheerQueued.current = false
+      setReducedPetActive(true)
+      return
+    }
+    // Coalesce repeated taps into one follow-up. Each response ends at zero,
+    // so a second touch never snaps a half-finished smile or head tilt back.
+    if (elapsed.current - petAt.current < PET_DURATION) petQueued.current = true
+    else petAt.current = elapsed.current
+  }, [petRevision, reduced, photoPose])
+  useEffect(() => {
+    if (!reducedPetActive) return
+    const timeout = window.setTimeout(() => setReducedPetActive(false), PET_DURATION * 1000)
+    return () => window.clearTimeout(timeout)
+  }, [reducedPetActive, petRevision])
+  useEffect(() => {
+    if (photoPose === null) return
+    cheerAt.current = petAt.current = reactionAt.current = -100
+    cheerQueued.current = petQueued.current = false
+    setReducedPetActive(false)
+    gaze.active = false
+    gaze.eyes.set(0, 0)
+    gaze.head.set(0, 0)
+    document.body.style.cursor = ''
+    const age = photoPose === 'cheer' ? CHEER_PEAK_TIME : 100
+    animateLionRig(rig, 0, 100, photoPose, age)
+    smile.current = getSmileAmount(age)
+    blink.current = 0
+  }, [photoPose, rig, gaze])
+  useEffect(() => {
+    if (!reduced) {
+      setReducedPetActive(false)
+      return
+    }
+    if (reduced && photoPose === null) {
+      cheerAt.current = petAt.current = reactionAt.current = -100
+      cheerQueued.current = petQueued.current = false
       const age = pose === 'cheer' && cheerRevision > 0 ? CHEER_PEAK_TIME : 100
-      animateLionRig(rig, 0, 100, pose, age)
-      smile.current = getSmileAmount(age)
+      const petAge = reducedPetActive ? PET_PEAK_TIME : 100
+      animateLionRig(rig, 0, 100, pose, age, petAge)
+      smile.current = getSmileAmount(age, 100, petAge)
       blink.current = 0
     }
-  }, [reduced, pose, cheerRevision, rig])
+  }, [reduced, pose, cheerRevision, rig, photoPose, reducedPetActive])
   useFrame(({ camera }, dt) => {
-    if (reduced || !animated) return
+    if (photoPose !== null || reduced || !animated) return
     if (document.hidden) return
     elapsed.current += Math.min(dt, 0.05)
     if (cheerQueued.current && elapsed.current - cheerAt.current >= CHEER_DURATION) {
       cheerAt.current = elapsed.current
       cheerQueued.current = false
     }
+    if (petQueued.current && elapsed.current - petAt.current >= PET_DURATION) {
+      petAt.current = elapsed.current
+      petQueued.current = false
+    }
     const reactionAge = elapsed.current - reactionAt.current, cheerAge = elapsed.current - cheerAt.current
-    blink.current = animateLionRig(rig, elapsed.current, reactionAge, pose, cheerAge)
-    smile.current = getSmileAmount(cheerAge, reactionAge)
-    updateLionGaze(gaze, rig, camera, dt, 1 - smile.current * 0.35)
+    const petAge = elapsed.current - petAt.current
+    blink.current = animateLionRig(rig, elapsed.current, reactionAge, pose, cheerAge, petAge)
+    smile.current = getSmileAmount(cheerAge, reactionAge, petAge)
+    updateLionGaze(gaze, rig, camera, dt, (1 - smile.current * 0.35) * (1 - getPetAmount(petAge) * 0.8))
   }, -1)
 
   function respond(id: number) {
+    if (photoPose !== null) return
     if (!reduced && animated) reactionAt.current = elapsed.current
     onSelect(id)
   }
 
   function select(event: ThreeEvent<MouseEvent>) {
     event.stopPropagation()
-    if (event.delta >= 6) return
+    if (event.delta >= 6 || photoPose !== null) return
     if (event.face) {
       const skinIndex = rig.mesh.geometry.getAttribute('skinIndex')
       const skinWeight = rig.mesh.geometry.getAttribute('skinWeight')
@@ -191,13 +249,14 @@ export default function LionModel({ pose, reduced, animated, cheerRevision, onSe
     }
     // Raycast the visible surface, so the back of the mane cannot select the face.
     const point = event.eventObject.worldToLocal(event.point.clone())
+    if (isPetPoint(point)) { onPet(); return }
     respond(lionPart(point))
   }
 
   return (
     <group position={[0, LION_GROUND, 0]}>
       <primitive object={rig.mesh} dispose={null} onClick={select}
-        onPointerOver={(event: ThreeEvent<PointerEvent>) => { event.stopPropagation(); document.body.style.cursor = 'pointer' }}
+        onPointerOver={(event: ThreeEvent<PointerEvent>) => { event.stopPropagation(); if (photoPose === null) document.body.style.cursor = 'pointer' }}
         onPointerOut={() => { document.body.style.cursor = '' }} />
       {createPortal(<group position={[0, -HEAD_PIVOT, 0]} onClick={event => { event.stopPropagation(); if (event.delta < 6) respond(2) }}>
         <FaceDetails blink={blink} smile={smile} gaze={gaze} />

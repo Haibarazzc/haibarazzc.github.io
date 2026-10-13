@@ -5,6 +5,8 @@ export const BODY_PIVOT = 0.32
 export const HEAD_PIVOT = 1.13
 export const CHEER_DURATION = 3.7
 export const CHEER_PEAK_TIME = 1.45
+export const PET_DURATION = 2.8
+export const PET_PEAK_TIME = 0.9
 
 // Both the sculpt and its separate tooth/tongue meshes use normalized model
 // coordinates, so one field keeps the original mouth contour joined together.
@@ -21,12 +23,17 @@ export function smileDisplacement(x: number, y: number, z: number): [number, num
   return [Math.sign(x) * corner * front * 0.006, (corner * 0.020 + cheek * 0.006) * front, cheek * front * 0.0025]
 }
 
-export function getSmileAmount(cheerAge: number, reactionAge = 100) {
+export function getPetAmount(petAge: number) {
+  return petAge >= 0 && petAge < PET_DURATION
+    ? T.MathUtils.smootherstep(petAge, 0, 0.62) * (1 - T.MathUtils.smootherstep(petAge, 1.45, PET_DURATION)) : 0
+}
+
+export function getSmileAmount(cheerAge: number, reactionAge = 100, petAge = 100) {
   const cheer = cheerAge >= 0 && cheerAge < CHEER_DURATION
     ? T.MathUtils.smootherstep(cheerAge, 0.10, 1.04) * (1 - T.MathUtils.smootherstep(cheerAge, 2.35, CHEER_DURATION)) : 0
   const response = reactionAge >= 0 && reactionAge < 1.7
     ? Math.sin(reactionAge * Math.PI / 1.7) ** 2 * 0.18 : 0
-  return Math.max(cheer, response)
+  return Math.max(cheer, response, getPetAmount(petAge) * 0.88)
 }
 
 export function addSmileMorph(geometry: T.BufferGeometry, origin: [number, number, number] = [0, 0, 0]) {
@@ -188,8 +195,9 @@ function cheerLift(age: number) {
     ? T.MathUtils.smootherstep(age, 0.22, 1.02) * (1 - T.MathUtils.smootherstep(age, 2.30, 3.60)) : 0
 }
 
-export function animateLionRig(rig: LionRig, time: number, reactionAge: number, pose: PoseId, cheerAge = 100) {
-  rig.mesh.morphTargetInfluences![0] = getSmileAmount(cheerAge, reactionAge)
+export function animateLionRig(rig: LionRig, time: number, reactionAge: number, pose: PoseId, cheerAge = 100, petAge = 100) {
+  rig.mesh.morphTargetInfluences![0] = getSmileAmount(cheerAge, reactionAge, petAge)
+  const pet = getPetAmount(petAge)
   const cheer = (cheerLift(cheerAge) + cheerLift(cheerAge - 0.10)) * 0.5
   for (let i = 0; i < 2; i++) {
     const side = i === 0 ? -1 : 1
@@ -223,11 +231,12 @@ export function animateLionRig(rig: LionRig, time: number, reactionAge: number, 
   const greeting = reactionAge >= 0 && reactionAge < 1.7
     ? Math.sin(reactionAge * Math.PI / 1.7) ** 2 : 0
   rig.head.rotation.set(
-    Math.sin(time * 0.77) * 0.010 + nod * 0.020 + greeting * Math.sin(reactionAge * 7) * 0.030 - cheer * 0.018,
-    Math.sin(time * 0.46) * 0.023 + (pose === 'glance' ? 0.012 : 0),
-    Math.sin(time * 0.64) * 0.014 + greeting * 0.018,
+    Math.sin(time * 0.77) * 0.010 + nod * 0.020 + greeting * Math.sin(reactionAge * 7) * 0.030 - cheer * 0.018 - pet * 0.010,
+    Math.sin(time * 0.46) * 0.023 + (pose === 'glance' ? 0.012 : 0) - pet * 0.008,
+    Math.sin(time * 0.64) * 0.014 + greeting * 0.018 + pet * 0.036,
   )
   rig.tail.rotation.y = Math.sin(time * 1.8) * 0.060 + Math.sin(time * 2.6) * 0.015 + greeting * Math.sin(reactionAge * 9) * 0.025
+    + (pet ? pet * Math.sin(petAge * 5.5) * 0.055 : 0)
   // Uneven spacing and an occasional double blink avoid a mechanical loop.
   const blinkCycle = time % 13.7
   return Math.max(...[2.3, 6.7, 11.5, 11.88].map(at => blinkPulse(blinkCycle - at)), blinkPulse(reactionAge - 0.18), blinkPulse(cheerAge - 0.12))

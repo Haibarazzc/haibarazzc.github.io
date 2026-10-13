@@ -23,13 +23,19 @@ html.sz-document,html.sz-document body{margin:0!important;background:#3a332c!imp
 .sz-help{max-width:470px;width:calc(100% - 40px);padding:0;border:1px solid #8a735c;border-radius:9px;background:#3a3128;color:#f7f0e4;font-family:"SimSun",serif;box-shadow:0 28px 110px rgba(0,0,0,.5)}.sz-help::backdrop{background:rgba(22,16,12,.76);backdrop-filter:blur(8px)}.sz-help>div{position:relative;padding:38px}.sz-help-close{position:absolute;top:14px;right:14px}.sz-help h2{font-weight:400;font-size:23px;margin:24px 0 15px}.sz-help p{font-size:13px;line-height:1.85;color:#e6d5bf}.sz-help dl{margin:27px 0}.sz-help dl>div{margin-bottom:19px}.sz-help dt{color:#f0d7a4;font-size:13px}.sz-help dd{margin:7px 0 0;color:#d9cbb8;font-size:12px;line-height:1.8}.sz-help small{color:#b7a48e;font-size:10px}.sz-help-enter{display:flex;align-items:center;justify-content:center;gap:16px;padding:13px 20px;width:100%;margin-top:27px;border:1px solid #c4842a;background:#6a4a28;color:#fff6e8;font-size:14px}.sz-notice{position:absolute;z-index:30;bottom:160px;left:50%;transform:translateX(-50%);padding:13px 20px;background:#5c4a34;color:#fff6e8;font-size:13px;max-width:80vw;border:1px solid #e7c27a}
 @keyframes szStoryIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}@keyframes szBreathe{to{opacity:.35}}
 .sz-mobile-help{display:none}
+.sz-play-tools{position:absolute;z-index:10;right:3.7%;top:calc(clamp(24px,3.3vw,52px) + 82px);display:flex;gap:8px}.sz-play-tools button{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:10px 16px;border:1px solid var(--sz-line);border-radius:100px;background:rgba(36,28,20,.74);backdrop-filter:blur(12px);color:#f0d7a4;font-size:12px;letter-spacing:.06em}.sz-play-tools button:hover{color:#fff6e8;background:#5c4a34}.sz-play-tools button:active{transform:translateY(1px)}
+.sz-world-caption{top:max(28%,calc(clamp(24px,3.3vw,52px) + 146px))}
+.sz-notice{pointer-events:none;width:max-content;box-sizing:border-box}
+.sz-help{max-height:calc(100dvh - 48px);overflow-y:auto}
 @media(min-width:1500px){.sz-story{top:23%;width:23%}.sz-description{font-size:13px}.sz-chapter-title h2{font-size:32px}.sz-brand strong{font-size:36px}.sz-dock{left:58%;bottom:86px}}
 @media(max-height:950px) and (min-width:901px){.sz-story{top:21%}.sz-intro h1{font-size:46px;line-height:1.4;margin:12px 0}.sz-intro-line{margin:23px 0 20px}.sz-chapter-english{margin-bottom:13px}.sz-description{font-size:11px}.sz-pagination{margin-top:8px}.sz-dock{bottom:65px}}
 @media(max-width:1100px) and (min-width:901px){.sz-story{left:4%;width:26%}.sz-brand strong{font-size:27px}.sz-time-switch button{padding:8px 13px}.sz-view-controls button{padding:10px 12px}.sz-compass{right:4%;transform:scale(.75);transform-origin:right bottom}.sz-instructions{display:none}.sz-intro h1{font-size:42px}}
 /* Mobile layers: scene 0, atmosphere 1, story 6, controls 10. */
-.sz-part-name,.sz-orbit-short,.sz-touch-hint{display:none}
+.sz-part-name,.sz-orbit-short{display:none}
 @media(max-width:900px){
   .sz-scene{--sz-safe-bottom:env(safe-area-inset-bottom,0px)}
+  .sz-play-tools{top:auto;left:16px;right:16px;bottom:calc(252px + var(--sz-safe-bottom));justify-content:center}.sz-play-tools button{padding:10px 18px}
+  .sz-notice{top:calc(72px + env(safe-area-inset-top,0px));bottom:auto;max-width:calc(100vw - 32px);padding:7px 14px;font-size:11px;line-height:1.6;text-align:center}
   .sz-mobile-help{display:inline-flex}
   .sz-header{padding:calc(16px + env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) 12px max(16px,env(safe-area-inset-left,0px))}
   .sz-seal{width:33px;height:40px;font-size:27px}
@@ -64,7 +70,6 @@ html.sz-document,html.sz-document body{margin:0!important;background:#3a332c!imp
   .sz-reset{width:48px;height:58px;border-radius:16px}.sz-reset svg{width:21px}
   .sz-footer{left:max(16px,env(safe-area-inset-left,0px));right:max(16px,env(safe-area-inset-right,0px));bottom:calc(6px + var(--sz-safe-bottom));gap:6px}
   .sz-instructions,.sz-signature{display:none}
-  .sz-touch-hint{display:flex;align-items:center;gap:6px;white-space:nowrap;font-size:10px;letter-spacing:.04em;color:#d9cbb8}
   .sz-utility{margin-left:auto;gap:6px}.sz-utility .sz-icon{width:44px;height:44px}
   .sz-compass,.sz-world-caption,.sz-pin{display:none}
   .sz-help{max-height:calc(100dvh - 32px - env(safe-area-inset-top,0px) - var(--sz-safe-bottom));overflow-y:auto}
@@ -83,6 +88,7 @@ html.sz-document,html.sz-document body{margin:0!important;background:#3a332c!imp
   .sz-part-name{font-size:10px}.sz-utility{gap:2px}
 }
 @media(max-width:900px) and (max-height:500px) and (orientation:landscape){
+  .sz-play-tools{left:max(16px,env(safe-area-inset-left,0px));right:auto;bottom:calc(60px + var(--sz-safe-bottom));width:24%;max-width:220px;gap:5px}.sz-play-tools button{flex:1;min-width:0;padding:8px 5px;font-size:11px;gap:5px}.sz-play-tools button svg{width:14px}
   .sz-header{padding-top:calc(8px + env(safe-area-inset-top,0px));padding-bottom:8px}
   .sz-brand small{display:none}.sz-seal{width:30px;height:36px;font-size:24px}
   .sz-world{left:24%;right:0;bottom:0}
@@ -93,4 +99,6 @@ html.sz-document,html.sz-document body{margin:0!important;background:#3a332c!imp
   .sz-atmosphere,.sz-cheer .sz-atmosphere,.sz-glance .sz-atmosphere{background:linear-gradient(90deg,rgba(var(--sz-bg-rgb),1),rgba(var(--sz-bg-rgb),.90) 22%,transparent 45%),linear-gradient(0deg,rgba(var(--sz-bg-rgb),.8),transparent 28%)}
 }
 @media(prefers-reduced-motion:reduce){.sz-scene *{animation:none!important;transition:none!important}}
+@media(max-width:900px) and (max-height:500px) and (orientation:landscape){.sz-notice{top:calc(64px + env(safe-area-inset-top,0px));left:64%;max-width:60vw}}
+@media(max-width:900px) and (max-height:360px) and (orientation:landscape){.sz-play-tools{top:calc(8px + env(safe-area-inset-top,0px));bottom:auto;left:calc(26% + 16px);right:auto;width:auto;max-width:none}.sz-play-tools button{flex:none;white-space:nowrap;padding:8px}}
 @media(max-height:740px) and (min-width:901px){.sz-description{display:none}.sz-intro-line{margin:16px 0}.sz-intro h1{font-size:38px}.sz-story{top:20%}}
