@@ -3,6 +3,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import sharp from 'sharp'
+import { lionPalette, recolorLionTexture } from './lion-palette.mjs'
 
 const root = fileURLToPath(new URL('../', import.meta.url))
 const originalPath = resolve(root, 'assets/models/shixiaoxin-complete.glb')
@@ -101,11 +102,18 @@ visitPositions((bytes, offset, accessor) => {
 
 sharp.cache(false)
 const textureStats = []
+let paletteStats
+const baseColorImages = new Set(document.materials.flatMap(material => {
+  const texture = material.pbrMetallicRoughness?.baseColorTexture
+  return texture ? [document.textures[texture.index].source] : []
+}))
 for (const [index, image] of document.images.entries()) {
   if (image.uri || image.bufferView === undefined) throw new Error('Expected embedded model textures.')
   const input = views[image.bufferView]
   const metadata = await sharp(input, { failOn: 'error' }).metadata()
-  const encode = size => sharp(input, { failOn: 'error' })
+  const recolored = baseColorImages.has(index) ? await recolorLionTexture(input, document, views) : null
+  if (recolored) paletteStats = recolored.stats
+  const encode = size => sharp(recolored?.input || input, { failOn: 'error', ...(recolored ? { raw: recolored.raw } : {}) })
     .resize({ width: size, height: size, fit: 'inside', withoutEnlargement: true })
     .webp({ lossless: true, effort: 6 }).toBuffer({ resolveWithObject: true })
   const web = await encode(2048)
@@ -178,4 +186,5 @@ console.log(JSON.stringify({
   vertices: positions.reduce((total, index) => total + document.accessors[index].count, 0),
   triangles: document.meshes.reduce((total, mesh) => total + mesh.primitives.reduce((count, primitive) => count + document.accessors[primitive.indices].count / 3, 0), 0),
   textures: textureStats,
+  palette: lionPalette, paletteStats,
 }, null, 2))

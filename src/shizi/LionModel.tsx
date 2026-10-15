@@ -6,7 +6,7 @@ import { animateLionRig, CHEER_DURATION, CHEER_PEAK_TIME, createLionRig, getPetA
 import { bindLionGaze, createLionGaze, updateLionGaze } from './lionGaze'
 import type { PoseId } from './data'
 
-const modelUrl = `${import.meta.env.BASE_URL}models/shixiaoxin-complete.glb`
+const modelUrl = `${import.meta.env.BASE_URL}models/shixiaoxin-complete.glb?v=palette-20261015`
 const LION_GROUND = 0.15
 
 // Coordinates are local to the normalized, three-unit-high model.

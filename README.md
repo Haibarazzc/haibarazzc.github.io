@@ -3,7 +3,8 @@
 南方科技大学致新书院吉祥物「狮小新」的三维展示页（https://haibarazzc.github.io/）。
 
 - React Three Fiber + three.js，使用提供的「狮小新_完整版.glb」，保留原有五官、白色手套、院徽与完整 PBR 材质；不再叠加旧版五官或院徽
-- 原文件约 26.96 MB，网页版本约 6.40 MB，保留 43,318 个顶点与 59,997 个三角面；三张贴图缩至 2048px 后以无损 WebP 保存，文件体积减少约 76%，无需外部解码器
+- 原文件约 26.96 MB，网页版本约 6.13 MB，保留 43,318 个顶点与 59,997 个三角面；三张贴图缩至 2048px 后以无损 WebP 保存，文件体积减少约 77%，无需外部解码器
+- 网页版按部位调整原贴图：身体与鬃毛 `#FF9C00`、呆毛 `#FBC700`、手套 `#FFFFFF`、面部 `#F6EAD2`、尾穗 `#A85A3C`。保留烘焙明暗、五官、院徽、法线与粗糙度，不改动原始 GLB
 - 几何统一为 Y-up、3 单位高度并贴地，保留原 UV、法线、索引及材质。新版表情通过局部形变保留贴图外观，骨骼权重在 UV 接缝处保持一致
 - 网页补充轻量骨骼控制：脚固定，胸腹呼吸、轻微点头、眨眼与尾摆；点击狮子会点头回应。右下角可暂停，遵循系统减少动态效果设置
 - 点击“欢呼”时先轻轻蓄势，双手错开举起并轻摆，配合笑眼与嘴角轻提，再柔和落回待机；可再次点击重播。静立 / 欢呼切换光照，回望切到侧面镜头
@@ -22,6 +23,6 @@ npm run typecheck # TypeScript 检查
 npm run build    # 构建 dist/
 ```
 
-完整模型原件保存在 `assets/models/shixiaoxin-complete.glb`，与用户提供的文件逐字节一致；网页加载 `public/models/shixiaoxin-complete.glb`。更新原件后运行 `npm run model:prepare`，常规构建直接使用已准备的模型。
+完整模型原件保存在 `assets/models/shixiaoxin-complete.glb`，与用户提供的文件逐字节一致；网页加载 `public/models/shixiaoxin-complete.glb`。更新原件后运行 `npm run model:prepare`，常规构建直接使用已准备的模型。配色在 `scripts/lion-palette.mjs` 定义，准备脚本按 UV 与模型位置分区改色，为接缝补足颜色边缘后压缩贴图；运行时的灯光仍会自然影响颜色观感。
 
 旧 OBJ 与 `model:convert` 保留供历史版本参考，不再作为当前页面的模型来源。
